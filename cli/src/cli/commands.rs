@@ -423,7 +423,7 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
 
     // Step 1: Install Skill
     let skill_status = install_skill(&home)?;
-    println!("  {} Skill        {}", skill_status.icon(), skill_status.message("~/.claude/skills/rick/SKILL.md"));
+    println!("  {} Skill        {}", skill_status.icon(), skill_status.message("~/.claude/skills/rick/ + Rick/"));
 
     // Step 2: Create Persona (never overwrite — user customizations are sacred)
     let soul_status = write_if_new(
@@ -528,10 +528,13 @@ fn write_if_new(path: &str, content: &str) -> Result<WriteStatus> {
     Ok(WriteStatus::Created)
 }
 
-/// Install the Rick skill to ~/.claude/skills/rick/SKILL.md.
+/// Install the Rick skill to ~/.claude/skills/rick/SKILL.md and ~/.claude/skills/Rick/SKILL.md.
 fn install_skill(home: &str) -> Result<WriteStatus> {
-    let skill_path = format!("{}/.claude/skills/rick/SKILL.md", home);
-    write_if_needed(&skill_path, SKILL_CONTENT)
+    let lowercase_path = format!("{}/.claude/skills/rick/SKILL.md", home);
+    let uppercase_path = format!("{}/.claude/skills/Rick/SKILL.md", home);
+    let status = write_if_needed(&lowercase_path, SKILL_CONTENT)?;
+    write_if_needed(&uppercase_path, SKILL_CONTENT)?;
+    Ok(status)
 }
 
 /// Show permissions guidance — detect missing perms and offer options.

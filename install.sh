@@ -283,7 +283,7 @@ printf "\n"
 printf "${GREEN}  Rick is ready!${RESET}\n"
 printf "\n"
 printf "  ${WHITE}Binary:${RESET}  ${RICK_PATH}\n"
-printf "  ${WHITE}Skill:${RESET}   ~/.claude/skills/rick/SKILL.md\n"
+printf "  ${WHITE}Skill:${RESET}   ~/.claude/skills/rick/ + Rick/\n"
 printf "  ${WHITE}Persona:${RESET} ~/.rick/persona/\n"
 if [[ -n "$UNIVERSE_URL" ]]; then
     printf "  ${WHITE}Universe:${RESET} cloned and compiled\n"

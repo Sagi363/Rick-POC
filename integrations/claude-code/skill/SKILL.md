@@ -65,7 +65,7 @@ Use this when the agent needs to **talk** — introductions, Q&A, explanations, 
 
 **Example:**
 ```
-User: /Rick let Sagi introduce himself
+User: /rick let Sagi introduce himself
 
 Sagi: Hey there, I'm Sagi — the senior dev who turns PRDs into shipping code :)
 ```
@@ -103,23 +103,23 @@ Use this when the agent needs to **do work** — write files, edit code, run com
 
 ## Available Commands
 
-### /Rick add <universe-repo-url> [-n name]
+### /rick add <universe-repo-url> [-n name]
 Clone an existing Universe from a git repo, validate it, and auto-compile its agents.
 Uses `rick add <url>` CLI command. Run from the project root — the Universe is cloned as a subdirectory.
 
-### /Rick list [workflows|agents|universes]
+### /rick list [workflows|agents|universes]
 Show available resources. Uses `rick list <type>` CLI command.
 
-### /Rick run <workflow-name> [--params='{"key": "value"}']
+### /rick run <workflow-name> [--params='{"key": "value"}']
 Start a workflow. Uses `rick run <workflow>` CLI command.
 1. Show the workflow plan (all steps)
 2. Ask for user confirmation
 3. Start execution
 
-### /Rick next
+### /rick next
 Execute the next step of the active workflow (uses Work Mode).
 
-### /Rick status
+### /rick status
 Show workflow progress. Uses `rick status` CLI command.
 
 ## State Files
@@ -132,16 +132,16 @@ Show workflow progress. Uses `rick status` CLI command.
 
 After completing a step, check the workflow state:
 - If next step has `auto_continue: true` -> execute it immediately
-- If next step has `auto_continue: false` -> report completion, wait for `/Rick next`
+- If next step has `auto_continue: false` -> report completion, wait for `/rick next`
 
 ## Error Handling
 
 If a step fails:
 1. Report clearly: "Rick: Step N failed: <error details>"
 2. Offer options:
-   - `/Rick next` to retry
-   - `/Rick next --skip` to skip and continue
-   - `/Rick cancel` to abort workflow
+   - `/rick next` to retry
+   - `/rick next --skip` to skip and continue
+   - `/rick cancel` to abort workflow
 3. Update state with failure info
 
 ## Agent Dispatch Protocol (CRITICAL)
@@ -194,7 +194,7 @@ If the user doesn't use a specific command, interpret their intent:
 
 ### Conversation Mode Example
 ```
-User: /Rick let Sagi explain what he does
+User: /rick let Sagi explain what he does
 
 Sagi: I'm the one who takes all those beautiful PRDs and design specs and turns
 them into code that actually compiles :) While everyone else is planning, I'm
@@ -203,7 +203,7 @@ shipping :)
 
 ### Work Mode Example
 ```
-User: /Rick run new-feature
+User: /rick run new-feature
 
 Rick: I found the "New Feature" workflow in the Issues Universe.
 
@@ -222,5 +222,5 @@ Executing Step 1/3: PM Agent - Creating PRD...
 PM: I've created the PRD for Quick Issue Creation with 5 user stories
 and acceptance criteria. Saved to docs/prd.md.
 
-Rick: Step 1 complete. Ready for Step 2: Designer Agent. Run /Rick next to continue.
+Rick: Step 1 complete. Ready for Step 2: Designer Agent. Run /rick next to continue.
 ```

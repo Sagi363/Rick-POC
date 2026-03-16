@@ -28,10 +28,10 @@ Rick introduces the concept of a **Universe** — a git repo containing your tea
 
 ```
 # Team lead creates the Universe
-/Rick init my-team git@github.com:your-org/my-universe.git
+/rick init my-team git@github.com:your-org/my-universe.git
 
 # Share with the team
-/Rick invite
+/rick invite
 # → Prints a one-liner anyone can run to join
 
 # Everyone else joins
@@ -51,7 +51,7 @@ When the team lead pushes an improvement — a better prompt, a new workflow ste
 One line:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh | bash
 ```
 
 This downloads the Rick binary, installs the Claude Code skill, and creates default persona files.
@@ -59,7 +59,7 @@ This downloads the Rick binary, installs the Claude Code skill, and creates defa
 To install and immediately join a team's Universe:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- -u git@github.com:your-org/your-universe.git
+curl -fsSL https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh | bash -s -- -u git@github.com:your-org/your-universe.git
 ```
 
 ### What gets installed
@@ -67,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | `rick` binary | `/usr/local/bin/` or `~/.local/bin/` | CLI tool |
-| Skill | `~/.claude/skills/rick/SKILL.md` | Enables `/Rick` in Claude Code |
+| Skill | `~/.claude/skills/rick/` + `Rick/` | Enables `/rick` and `/Rick` in Claude Code |
 | Persona | `~/.rick/persona/soul.md` + `rules.md` | Rick's personality (yours to customize) |
 
 ### Requirements
@@ -152,15 +152,15 @@ Each step invokes a specific agent with a task. `checkpoint: true` pauses for yo
 ## Creating a Universe
 
 ```
-/Rick init my-team git@github.com:your-org/my-universe.git
+/rick init my-team git@github.com:your-org/my-universe.git
 ```
 
 This creates the directory structure, initializes the git repo, and links it to your remote. Then:
 
 1. **Add agents** — Create folders under `agents/` with `soul.md`, `rules.md`, and `tools.md`
 2. **Add workflows** — Create YAML files under `workflows/` that chain your agents
-3. **Compile** — `/Rick compile` generates Claude Code sub-agents
-4. **Invite** — `/Rick invite` prints a one-liner your teammates can run to join
+3. **Compile** — `/rick compile` generates Claude Code sub-agents
+4. **Invite** — `/rick invite` prints a one-liner your teammates can run to join
 
 From that point on, `git pull && rick compile` keeps everyone in sync.
 
@@ -169,20 +169,20 @@ From that point on, `git pull && rick compile` keeps everyone in sync.
 ### In Claude Code (primary)
 
 ```
-/Rick list agents          # See available agents
-/Rick list workflows       # See available workflows
-/Rick run new-feature      # Start a workflow
-/Rick next                 # Execute next step
-/Rick status               # Check progress
-/Rick invite               # Generate a shareable install link
+/rick list agents          # See available agents
+/rick list workflows       # See available workflows
+/rick run new-feature      # Start a workflow
+/rick next                 # Execute next step
+/rick status               # Check progress
+/rick invite               # Generate a shareable install link
 ```
 
 Natural language works too:
 
 ```
-/Rick ask the PM to write a PRD for user authentication
-/Rick have TicketMaster check my open tickets
-/Rick let the designer review this layout
+/rick ask the PM to write a PRD for user authentication
+/rick have TicketMaster check my open tickets
+/rick let the designer review this layout
 ```
 
 ### CLI
