@@ -1,0 +1,9 @@
+cli/target/
+universes/
+docs/
+CLAUDE.md
+.rick/state/
+.rick/prompts/
+.claude/agents/rick-*
+*.log
+.DS_Store

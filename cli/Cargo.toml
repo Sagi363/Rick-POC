@@ -1,0 +1,15 @@
+[package]
+name = "rick"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rick"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
