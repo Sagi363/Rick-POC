@@ -56,7 +56,7 @@ curl -fsSL https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh | 
 
 This downloads the Rick binary, installs the Claude Code skill, and creates default persona files.
 
-Try it with the [Demo Universe](https://github.com/Sagi363/Demo-Rick-Universe) — 5 agents with hilarious personalities, 3 ready-to-run workflows:
+Try it with the [Demo Universe](https://github.com/Sagi363/Demo-Rick-Universe) — 7 agents with hilarious personalities, 3 ready-to-run workflows:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- -u git@github.com:Sagi363/Demo-Rick-Universe.git
@@ -74,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | 
 |-----------|----------|---------|
 | `rick` binary | `/usr/local/bin/` or `~/.local/bin/` | CLI tool |
 | Skill | `~/.claude/skills/rick/` + `Rick/` | Enables `/rick` and `/Rick` in Claude Code |
-| Persona | `~/.rick/persona/soul.md` + `rules.md` | Rick's personality (yours to customize) |
+| Persona | `~/.rick/persona/soul.md` + `rules.md` + `Memory.md` | Rick's personality and persistent memory |
 
 ### Requirements
 
@@ -105,7 +105,7 @@ Universes are shareable. Push one to GitHub and anyone can join with a single co
 
 ### Agents
 
-An agent is a folder with markdown files that define its personality (`soul.md`), constraints (`rules.md`), and tool access (`tools.md`):
+An agent is a folder with markdown files that define its personality (`soul.md`), constraints (`rules.md`), tool access (`tools.md`), and persistent memory (`Memory.md`):
 
 ```
 agents/
@@ -113,13 +113,14 @@ agents/
     soul.md       # Personality and expertise
     rules.md      # Behavioral constraints
     tools.md      # Allowed tools, model, dependencies
+    Memory.md     # Persistent learnings across sessions
   designer/
     ...
   developer/
     ...
 ```
 
-Each agent has its own persona, rules, and tool permissions. The PM can't edit code. The developer can't modify Jira tickets. Separation of concerns, enforced.
+Each agent has its own persona, rules, tool permissions, and accumulated knowledge. The PM can't edit code. The developer can't modify Jira tickets. Memory grows over time as agents learn from each workflow run. Separation of concerns, enforced.
 
 ### Workflows
 
@@ -163,7 +164,7 @@ Each step invokes a specific agent with a task. `checkpoint: true` pauses for yo
 
 This creates the directory structure, initializes the git repo, and links it to your remote. Then:
 
-1. **Add agents** — Create folders under `agents/` with `soul.md`, `rules.md`, and `tools.md`
+1. **Add agents** — Create folders under `agents/` with `soul.md`, `rules.md`, `tools.md`, and optionally `Memory.md`
 2. **Add workflows** — Create YAML files under `workflows/` that chain your agents
 3. **Compile** — `/rick compile` generates Claude Code sub-agents
 4. **Push** — `/rick push` commits and pushes changes to your team
@@ -228,7 +229,7 @@ Rick has a customizable personality stored at `~/.rick/persona/`:
 
 - **soul.md** — Voice, personality, communication style
 - **rules.md** — Hard behavioral constraints
-- **Memory.md** — Persistent learnings (created at runtime)
+- **Memory.md** — Persistent learnings (created by `rick setup`)
 
 These files are local-only (never in git) and survive reinstalls. Running `rick setup` again will never overwrite your customized persona. Edit them to make Rick yours.
 

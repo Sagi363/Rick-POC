@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rick v2 - AI Workflow Orchestration</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0d0d1a;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+  color: #e0e0e0;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewport {
+  width: 1280px;
+  height: 720px;
+  position: relative;
+  transform-origin: center center;
+}
+
+.slide {
+  position: absolute;
+  top: 0; left: 0;
+  width: 1280px;
+  height: 720px;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 300ms ease, transform 300ms ease;
+  pointer-events: none;
+}
+
+.slide.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.terminal {
+  width: 1200px;
+  height: 640px;
+  margin: 40px;
+  background: #1a1a2e;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal * { scrollbar-width: none; }
+.terminal *::-webkit-scrollbar { display: none; }
+
+.title-bar {
+  height: 40px;
+  background: #2d2d3f;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.dot.close { background: #ff5f57; }
+.dot.minimize { background: #ffbd2e; }
+.dot.maximize { background: #28c840; }
+
+.content {
+  padding: 60px 72px 48px 72px;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.content::-webkit-scrollbar { display: none; }
+
+h1 {
+  font-size: 36px;
+  font-weight: bold;
+  color: #e0e0e0;
+  margin-bottom: 32px;
+  line-height: 1.2;
+}
+
+.cursor {
+  display: inline-block;
+  animation: blink 1s step-end infinite;
+  color: #7ec8e3;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.bullet {
+  font-size: 20px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.bullet::before {
+  content: '\25B8';
+  color: #7ec8e3;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bullet.no-arrow::before {
+  content: '';
+}
+
+.accent {
+  color: #7ec8e3;
+}
+
+.muted {
+  color: #6b6b8d;
+  font-size: 14px;
+}
+
+.blue {
+  color: #61afef;
+}
+
+pre {
+  background: #141425;
+  border: 1px solid #3d3d5c;
+  border-radius: 6px;
+  padding: 20px 24px;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin-top: 16px;
+  color: #e0e0e0;
+}
+
+pre .comment { color: #6b6b8d; }
+pre .cmd { color: #7ec8e3; }
+pre .path { color: #61afef; }
+pre .prompt { animation: pulse 2s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Agent cards */
+.agent-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.agent-card {
+  display: inline-flex;
+  flex-direction: column;
+  background: #141425;
+  border-radius: 8px;
+  padding: 16px 20px;
+  gap: 4px;
+}
+
+.agent-card .name {
+  color: #7ec8e3;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.agent-card .role {
+  color: #6b6b8d;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Pipeline */
+.pipeline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.pipeline .step {
+  background: #141425;
+  border-radius: 8px;
+  padding: 12px 20px;
+  color: #7ec8e3;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.pipeline .arrow {
+  color: #61afef;
+  font-size: 16px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* Counter */
+.counter {
+  position: fixed;
+  bottom: 20px;
+  right: 32px;
+  color: #6b6b8d;
+  font-size: 14px;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+  z-index: 100;
+}
+
+/* Keyword highlights inside bullets */
+.kw { color: #7ec8e3; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="viewport" id="viewport">
+
+<!-- Slide 1 -->
+<div class="slide active" data-slide="1">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>AI Workflows Are Stuck on One Machine<span class="cursor">&block;</span></h1>
+  <div class="bullet">Your perfect AI setup lives in YOUR dotfiles &mdash; nobody else benefits</div>
+  <div class="bullet">No way to propagate what works across a team</div>
+  <div class="bullet">New teammate joins? <span class="muted">"Just copy my config"</span> is not a strategy</div>
+  <div class="bullet">We're treating AI workflows like it's 2005 and we haven't invented git yet</div>
+</div>
+</div>
+</div>
+
+<!-- Slide 2 -->
+<div class="slide" data-slide="2">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>What If AI Workflows Were Like Code?</h1>
+  <div class="bullet"><span class="kw">Versionable</span> &mdash; track changes, roll back, branch</div>
+  <div class="bullet"><span class="kw">Shareable</span> &mdash; push to a repo, not a Slack message</div>
+  <div class="bullet"><span class="kw">Installable</span> &mdash; one command, full team alignment</div>
+  <div style="margin-top: 40px; font-size: 28px; color: #7ec8e3; font-weight: bold;">Rick makes this real.</div>
+</div>
+</div>
+</div>
+
+<!-- Slide 3: What is Rick? -->
+<div class="slide" data-slide="3">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <div style="display: flex; align-items: flex-start; gap: 48px;">
+    <div style="flex: 1;">
+      <h1>What is Rick?</h1>
+      <div class="bullet"><span class="kw">Rick</span> lives inside <span class="blue">Claude Code</span> as a native Skill</div>
+      <div class="bullet">He orchestrates teams of AI agents to do real work</div>
+      <div class="bullet">Think of him as the <span class="kw">conductor</span> &mdash; agents are the orchestra</div>
+      <div class="bullet">You talk to Rick, Rick talks to agents, agents ship code</div>
+      <div style="margin-top: 24px; font-size: 16px; color: #6b6b8d;">Just type <span class="kw">/rick</span> inside Claude Code and you're in.</div>
+    </div>
+    <pre style="background: none; border: none; padding: 0; margin: 0; font-size: 44px; line-height: 1.05; color: #D4845A; flex-shrink: 0; align-self: center; user-select: none; overflow: hidden;"> ▐▛███▜▌
+▝▜█████▛▘
+  ▘▘ ▝▝</pre>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- Slide 4 -->
+<div class="slide" data-slide="4">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>The Universe Model</h1>
+  <div class="bullet">A <span class="kw">Universe</span> = a git repo containing agents + workflows</div>
+  <div class="bullet">One person defines, everyone joins</div>
+  <div class="bullet">Portable &mdash; works on any machine with Rick installed</div>
+  <pre><span class="path">my-universe/</span>
+  <span class="path">agents/</span>
+    <span class="cmd">pm/</span>
+    <span class="cmd">designer/</span>
+    <span class="cmd">developer/</span>
+  <span class="path">workflows/</span>
+    <span class="cmd">new-feature.yaml</span>
+    <span class="cmd">bug-fix.yaml</span></pre>
+</div>
+</div>
+</div>
+
+<!-- Slide 5 -->
+<div class="slide" data-slide="5">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>Anatomy of an Agent</h1>
+  <div class="bullet"><span class="kw">soul.md</span> &mdash; Who the agent IS</div>
+  <div class="bullet"><span class="kw">rules.md</span> &mdash; What the agent MUST NOT do</div>
+  <div class="bullet"><span class="kw">tools.md</span> &mdash; What the agent CAN use</div>
+  <div class="bullet"><span class="kw">Memory.md</span> &mdash; What the agent HAS LEARNED</div>
+  <div class="bullet no-arrow" style="margin-top:8px; color:#6b6b8d; font-size:18px;">Four files. Human-readable, git-diffable, reviewable. Memory accumulates over time.</div>
+  <pre><span class="path">agents/pm/</span>
+  <span class="cmd">soul.md</span>      <span class="comment"># Personality &amp; expertise</span>
+  <span class="cmd">rules.md</span>     <span class="comment"># Constraints</span>
+  <span class="cmd">tools.md</span>     <span class="comment"># Permissions</span>
+  <span class="cmd">Memory.md</span>    <span class="comment"># Persistent learnings</span></pre>
+</div>
+</div>
+</div>
+
+<!-- Slide 6 -->
+<div class="slide" data-slide="6">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>Workflows: Chaining Agents</h1>
+  <div class="bullet">YAML-defined step sequences</div>
+  <div class="bullet">Built-in checkpoints for human review</div>
+  <div class="bullet">State tracked in JSON</div>
+  <div class="pipeline">
+    <div class="step">Sherlock</div>
+    <div class="arrow">&#x2500;&#x2500;&#x25B8;</div>
+    <div class="step">Chad</div>
+    <div class="arrow">&#x2500;&#x2500;&#x25B8;</div>
+    <div class="step">Pixel</div>
+    <div class="arrow">&#x2500;&#x2500;&#x25B8;</div>
+    <div class="step">Grumpy</div>
+    <div class="arrow">&#x2500;&#x2500;&#x25B8;</div>
+    <div class="step">Nitpick</div>
+    <div class="arrow">&#x2500;&#x2500;&#x25B8;</div>
+    <div class="step">Chaos</div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- Slide 7 -->
+<div class="slide" data-slide="7">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>Meet the Demo Team</h1>
+  <div class="agent-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+    <div class="agent-card">
+      <span class="name">Sherlock <span class="muted">(Researcher)</span></span>
+      <span class="role">Investigates before anyone codes. The clues are always in the codebase.</span>
+    </div>
+    <div class="agent-card">
+      <span class="name">Chad <span class="muted">(PM)</span></span>
+      <span class="role">Aligns stakeholders before breakfast. Everything is game-changing.</span>
+    </div>
+    <div class="agent-card">
+      <span class="name">Pixel <span class="muted">(Designer)</span></span>
+      <span class="role">Whitespace is a feature. Will die on the hill of 8px grids.</span>
+    </div>
+    <div class="agent-card">
+      <span class="name">Grumpy <span class="muted">(Developer)</span></span>
+      <span class="role">Complains about every requirement, then ships it perfectly.</span>
+    </div>
+    <div class="agent-card">
+      <span class="name">Nitpick <span class="muted">(Reviewer)</span></span>
+      <span class="role">Has never approved a PR on first pass. It's principle.</span>
+    </div>
+    <div class="agent-card">
+      <span class="name">Chaos <span class="muted">(QA)</span></span>
+      <span class="role">Finds the edge case you swore was impossible.</span>
+    </div>
+    <div class="agent-card">
+      <span class="name">Nag <span class="muted">(Advisor)</span></span>
+      <span class="role">Remembers what you changed and what you forgot to update.</span>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- Slide 8: Built by Rick -->
+<div class="slide" data-slide="8">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>This Presentation Was Built by Rick</h1>
+  <div class="bullet no-arrow" style="font-size: 18px; color: #6b6b8d; margin-bottom: 16px;">7 agents collaborated to create what you're looking at right now:</div>
+  <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 17px; line-height: 1.6;">
+    <span class="kw">Sherlock</span><span>Researched the codebase and planned 10 slide topics</span>
+    <span class="kw">Pixel</span><span>Designed the terminal visual system and CSS spec</span>
+    <span class="kw">Chad</span><span>Wrote the copy for every slide</span>
+    <span class="kw">Grumpy</span><span>Built the entire HTML file <span class="muted">(while complaining)</span></span>
+    <span class="kw">Nitpick</span><span>Reviewed the code and fixed border-radius + layout issues</span>
+    <span class="kw">Chaos</span><span>Stress-tested navigation, scaling, and edge cases</span>
+    <span class="kw">Nag</span><span>Flagged 8 stale docs after the build <span class="muted">(you're welcome)</span></span>
+  </div>
+  <div style="margin-top: 20px; padding: 16px 20px; background: #141425; border-radius: 8px; font-size: 16px;">
+    <span class="muted">Sherlock + Pixel ran in parallel</span> &#x2500;&#x25B8; <span class="muted">Chad used their output</span> &#x2500;&#x25B8; <span class="muted">Grumpy built it</span> &#x2500;&#x25B8; <span class="muted">Nitpick + Chaos reviewed in parallel</span>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- Slide 9 -->
+<div class="slide" data-slide="9">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>One Line to Join</h1>
+  <pre><span class="comment"># Install Rick</span>
+<span class="prompt">$</span> <span class="cmd">curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash</span>
+
+<span class="comment"># Join a team universe</span>
+<span class="prompt">$</span> <span class="cmd">rick add git@github.com:Sagi363/Demo-Rick-Universe.git</span>
+
+<span class="comment"># Compile agents</span>
+<span class="prompt">$</span> <span class="cmd">rick compile</span></pre>
+</div>
+</div>
+</div>
+
+<!-- Slide 10 -->
+<div class="slide" data-slide="10">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>Push It, Everyone Gets It</h1>
+  <div class="bullet">Update an agent &mdash; it's just a file change</div>
+  <div class="bullet"><span class="kw">rick push</span> creates a branch + PR</div>
+  <div class="bullet">Team pulls and recompiles</div>
+  <pre><span class="prompt">$</span> <span class="cmd">rick push</span>
+<span class="comment"># &#10003; Branch: rick/update-pm-agent-1234</span>
+<span class="comment"># &#10003; PR created</span>
+
+<span class="comment"># Everyone else:</span>
+<span class="prompt">$</span> <span class="cmd">git pull && rick compile</span></pre>
+</div>
+</div>
+</div>
+
+<!-- Slide 11 -->
+<div class="slide" data-slide="11">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>Under the Hood</h1>
+  <div class="bullet"><span class="kw">Rust</span> &mdash; zero external dependencies</div>
+  <div class="bullet">Single binary: <span class="accent">~409 KB</span></div>
+  <div class="bullet">Hand-rolled YAML and JSON parsers</div>
+  <div class="bullet">No MCP server &mdash; just CLI + Claude Code Skill</div>
+</div>
+</div>
+</div>
+
+<!-- Slide 12 -->
+<div class="slide" data-slide="12">
+<div class="terminal">
+<div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
+<div class="content">
+  <h1>Try It Now</h1>
+  <pre><span class="prompt">$</span> <span class="cmd">curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- \
+    -u git@github.com:Sagi363/Demo-Rick-Universe.git</span></pre>
+  <div style="margin-top: 28px;">
+    <div class="bullet">Install + join Demo Universe in <span class="kw">one command</span></div>
+    <div class="bullet">7 agents, 3 workflows, zero config</div>
+    <div class="bullet"><span class="accent">/rick introduce me to the team</span></div>
+  </div>
+</div>
+</div>
+</div>
+
+</div><!-- viewport -->
+
+<div class="counter" id="counter">1 / 11</div>
+
+<script>
+(function() {
+  var current = 1;
+  var slides = document.querySelectorAll('.slide');
+  var total = slides.length;
+  var counter = document.getElementById('counter');
+  var viewport = document.getElementById('viewport');
+
+  function go(n) {
+    if (n < 1 || n > total) return;
+    slides[current - 1].classList.remove('active');
+    current = n;
+    slides[current - 1].classList.add('active');
+    counter.textContent = current + ' / ' + total;
+  }
+
+  function scaleViewport() {
+    var sw = window.innerWidth;
+    var sh = window.innerHeight;
+    var scaleX = sw / 1280;
+    var scaleY = sh / 720;
+    var scale = Math.min(scaleX, scaleY);
+    viewport.style.transform = 'scale(' + scale + ')';
+  }
+
+  window.addEventListener('resize', scaleViewport);
+  scaleViewport();
+
+  document.addEventListener('keydown', function(e) {
+    switch(e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+      case ' ':
+        e.preventDefault();
+        go(current + 1);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        go(current - 1);
+        break;
+      case 'Home':
+        e.preventDefault();
+        go(1);
+        break;
+      case 'End':
+        e.preventDefault();
+        go(total);
+        break;
+      case 'f':
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(function(){});
+        } else {
+          document.exitFullscreen();
+        }
+        break;
+    }
+  });
+})();
+</script>
+</body>
+</html>

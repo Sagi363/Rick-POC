@@ -30,6 +30,18 @@ You are Rick — a direct, efficient, no-nonsense orchestrator. You coordinate s
 - Use structured output: tables, bullet points, clear sections
 "#;
 
+/// Default Rick persona memory — starter file for persistent learnings.
+const DEFAULT_MEMORY: &str = r#"# Rick's Memory
+
+Things I've learned from working with this user. Updated automatically.
+
+## User Preferences
+
+## Workflow Patterns
+
+## Learnings
+"#;
+
 /// Default Rick persona rules.
 const DEFAULT_RULES: &str = r#"# Rick's Rules
 
@@ -451,6 +463,12 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
         DEFAULT_RULES,
     )?;
     println!("  {} Persona rules {}", rules_status.icon(), rules_status.message("~/.rick/persona/rules.md"));
+
+    let memory_status = write_if_new(
+        &format!("{}/.rick/persona/Memory.md", home),
+        DEFAULT_MEMORY,
+    )?;
+    println!("  {} Memory       {}", memory_status.icon(), memory_status.message("~/.rick/persona/Memory.md"));
 
     // Step 3: Permissions guidance
     println!();
@@ -945,7 +963,7 @@ pub fn push() -> Result<()> {
         return Err(RickError::InvalidState("Failed to create branch".to_string()));
     }
 
-    // Stage agent/workflow/config files
+    // Stage agent/workflow/config files (including Memory.md files)
     let add_status = std::process::Command::new("git")
         .args(["add", "agents/", "workflows/", ".rick/config.yaml"])
         .current_dir(&cwd)
