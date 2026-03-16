@@ -166,7 +166,8 @@ This creates the directory structure, initializes the git repo, and links it to 
 1. **Add agents** — Create folders under `agents/` with `soul.md`, `rules.md`, and `tools.md`
 2. **Add workflows** — Create YAML files under `workflows/` that chain your agents
 3. **Compile** — `/rick compile` generates Claude Code sub-agents
-4. **Invite** — `/rick invite` prints a one-liner your teammates can run to join
+4. **Push** — `/rick push` commits and pushes changes to your team
+5. **Invite** — `/rick invite` prints a one-liner your teammates can run to join
 
 From that point on, `git pull && rick compile` keeps everyone in sync.
 
@@ -180,6 +181,7 @@ From that point on, `git pull && rick compile` keeps everyone in sync.
 /rick run new-feature      # Start a workflow
 /rick next                 # Execute next step
 /rick status               # Check progress
+/rick push                 # Commit + push Universe changes to your team
 /rick invite               # Generate a shareable install link
 ```
 
@@ -202,6 +204,7 @@ rick check                                    # Verify dependencies
 rick run <workflow>                            # Start a workflow
 rick next                                     # Continue workflow
 rick status                                   # Show progress
+rick push                                     # Commit + push changes
 rick invite                                   # Shareable install link
 ```
 
