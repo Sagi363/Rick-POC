@@ -81,6 +81,7 @@ fn run() -> error::Result<()> {
             commands::add(&args[1], custom_name)?;
         }
         "next" => commands::next()?,
+        "push" => commands::push()?,
         "setup" => {
             // Parse flags: --universe <url>, --install-deps
             let universe_url = args.windows(2)

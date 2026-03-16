@@ -115,6 +115,20 @@ pub fn compile() -> Result<()> {
         println!("\x1b[90m    {}\x1b[0m", display);
     }
 
+    // Hint: suggest push if there are uncommitted agent/workflow changes
+    let status_output = std::process::Command::new("git")
+        .args(["status", "--porcelain", "agents/", "workflows/"])
+        .current_dir(&cwd)
+        .output();
+
+    if let Ok(output) = status_output {
+        let changes = String::from_utf8_lossy(&output.stdout);
+        if !changes.trim().is_empty() {
+            println!();
+            println!("\x1b[90m  Tip: Run `rick push` to share these changes with your team.\x1b[0m");
+        }
+    }
+
     Ok(())
 }
 
@@ -810,6 +824,144 @@ pub fn invite() -> Result<()> {
         universe.name, universe.version, agents.len(), workflows.len()
     );
     println!();
+
+    Ok(())
+}
+
+/// Execute the `push` command — commit and push Universe changes, then recompile.
+pub fn push() -> Result<()> {
+    let cwd = env::current_dir()?;
+    let _universe = Universe::load(&cwd)?;
+
+    // Check for uncommitted changes in agents/ and workflows/
+    let status_output = std::process::Command::new("git")
+        .args(["status", "--porcelain", "agents/", "workflows/", ".rick/config.yaml"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| RickError::Io(e))?;
+
+    let changes = String::from_utf8_lossy(&status_output.stdout);
+    let changed_files: Vec<&str> = changes.lines().filter(|l| !l.is_empty()).collect();
+
+    if changed_files.is_empty() {
+        println!("\x1b[36mRick: No Universe changes to push.\x1b[0m");
+        return Ok(());
+    }
+
+    // Show what changed
+    println!("\x1b[36mRick: Detected Universe changes:\x1b[0m");
+    println!();
+
+    let mut modified_agents: Vec<String> = Vec::new();
+    let mut modified_workflows: Vec<String> = Vec::new();
+    let mut other_files: Vec<String> = Vec::new();
+
+    for line in &changed_files {
+        let file = line.get(3..).unwrap_or(line).trim();
+        if file.starts_with("agents/") {
+            // Extract agent name from path: agents/chad-pm/soul.md -> chad-pm
+            let parts: Vec<&str> = file.split('/').collect();
+            if parts.len() >= 2 {
+                let agent_name = parts[1].to_string();
+                if !modified_agents.contains(&agent_name) {
+                    modified_agents.push(agent_name);
+                }
+            }
+        } else if file.starts_with("workflows/") {
+            let parts: Vec<&str> = file.split('/').collect();
+            if parts.len() >= 2 {
+                let wf_name = parts[1].to_string();
+                if !modified_workflows.contains(&wf_name) {
+                    modified_workflows.push(wf_name);
+                }
+            }
+        } else {
+            other_files.push(file.to_string());
+        }
+    }
+
+    for a in &modified_agents {
+        println!("  \x1b[33m↻\x1b[0m Agent: \x1b[97m{}\x1b[0m", a);
+    }
+    for w in &modified_workflows {
+        println!("  \x1b[33m↻\x1b[0m Workflow: \x1b[97m{}\x1b[0m", w);
+    }
+    for f in &other_files {
+        println!("  \x1b[33m↻\x1b[0m {}", f);
+    }
+
+    // Build commit message
+    let mut msg_parts: Vec<String> = Vec::new();
+    if !modified_agents.is_empty() {
+        if modified_agents.len() == 1 {
+            msg_parts.push(format!("Update {} agent", modified_agents[0]));
+        } else {
+            msg_parts.push(format!("Update agents: {}", modified_agents.join(", ")));
+        }
+    }
+    if !modified_workflows.is_empty() {
+        if modified_workflows.len() == 1 {
+            msg_parts.push(format!("Update {} workflow", modified_workflows[0]));
+        } else {
+            msg_parts.push(format!("Update workflows: {}", modified_workflows.join(", ")));
+        }
+    }
+    if !other_files.is_empty() && msg_parts.is_empty() {
+        msg_parts.push("Update Universe config".to_string());
+    }
+
+    let commit_msg = if msg_parts.is_empty() {
+        "Update Universe".to_string()
+    } else {
+        msg_parts.join(", ")
+    };
+
+    println!();
+    println!("\x1b[90m  Commit: \"{}\"\x1b[0m", commit_msg);
+
+    // Stage agent/workflow/config files
+    let add_status = std::process::Command::new("git")
+        .args(["add", "agents/", "workflows/", ".rick/config.yaml"])
+        .current_dir(&cwd)
+        .status()
+        .map_err(|e| RickError::Io(e))?;
+
+    if !add_status.success() {
+        return Err(RickError::InvalidState("git add failed".to_string()));
+    }
+
+    // Commit
+    let commit_status = std::process::Command::new("git")
+        .args(["commit", "-m", &commit_msg])
+        .current_dir(&cwd)
+        .status()
+        .map_err(|e| RickError::Io(e))?;
+
+    if !commit_status.success() {
+        return Err(RickError::InvalidState("git commit failed".to_string()));
+    }
+
+    println!("  \x1b[32m✓\x1b[0m Committed");
+
+    // Push
+    let push_status = std::process::Command::new("git")
+        .args(["push"])
+        .current_dir(&cwd)
+        .status()
+        .map_err(|e| RickError::Io(e))?;
+
+    if !push_status.success() {
+        return Err(RickError::InvalidState("git push failed — you may need to push manually".to_string()));
+    }
+
+    println!("  \x1b[32m✓\x1b[0m Pushed to remote");
+
+    // Recompile
+    println!();
+    compile()?;
+
+    println!();
+    println!("\x1b[32mRick: Universe changes are live. Your team can pull and recompile.\x1b[0m");
 
     Ok(())
 }
