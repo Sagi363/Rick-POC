@@ -122,16 +122,15 @@ h1 {
   font-size: 20px;
   line-height: 1.6;
   margin-bottom: 8px;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  padding-left: 24px;
+  position: relative;
 }
 
 .bullet::before {
   content: '\25B8';
   color: #7ec8e3;
-  flex-shrink: 0;
-  margin-top: 1px;
+  position: absolute;
+  left: 0;
 }
 
 .bullet.no-arrow::before {
@@ -253,10 +252,9 @@ pre .prompt { animation: pulse 2s ease-in-out infinite; }
 <div class="title-bar"><div class="dots"><div class="dot close"></div><div class="dot minimize"></div><div class="dot maximize"></div></div></div>
 <div class="content">
   <h1>Your AI Setup Is a Snowflake<span class="cursor">&block;</span></h1>
-  <div class="bullet">You spent 3 days tuning your AI workflow. It lives in <span class="kw">your</span> dotfiles. Congrats.</div>
-  <div class="bullet">New dev joins &mdash; gets the README from 2022 and a <span class="muted">"good luck"</span></div>
-  <div class="bullet">Your teammate's agents have different rules. Nobody knows whose are right.</div>
-  <div class="bullet">Sharing AI config in 2026: screenshot in Slack, prayer in prod</div>
+  <div class="bullet">You spent 3 days tuning your AI workflow. It lives in <span class="blue">your computer</span>. Congrats.</div>
+  <div class="bullet">Your teammate's agents have different <span class="blue">rules and skills</span>. Nobody knows whose are right.</div>
+  <div class="bullet">Everyone reinvents the wheel instead of building one car <span class="blue">together</span></div>
   <div style="margin-top: auto; text-align: center; font-size: 100px; padding-bottom: 8px;">👎</div>
 </div>
 </div>
