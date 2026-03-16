@@ -10,6 +10,7 @@ pub struct Universe {
     pub name: String,
     pub version: String,
     pub description: String,
+    pub repository: String,
     pub path: PathBuf,
 }
 
@@ -39,11 +40,16 @@ impl Universe {
             .get_str("description")
             .unwrap_or("")
             .to_string();
+        let repository = parsed
+            .get_str("repository")
+            .unwrap_or("")
+            .to_string();
 
         Ok(Universe {
             name,
             version,
             description,
+            repository,
             path: dir.to_path_buf(),
         })
     }

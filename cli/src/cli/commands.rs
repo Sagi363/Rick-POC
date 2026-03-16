@@ -754,6 +754,47 @@ fn install_agent_deps() -> Result<()> {
     Ok(())
 }
 
+/// Execute the `invite` command — generate a shareable install command for the current Universe.
+pub fn invite() -> Result<()> {
+    let cwd = env::current_dir()?;
+    let universe = Universe::load(&cwd)?;
+    let agents = agent::load_agents(&universe)?;
+    let workflows = workflow::load_workflows(&universe)?;
+
+    if universe.repository.is_empty() {
+        return Err(RickError::InvalidState(
+            "No 'repository' field in .rick/config.yaml — add it to enable invite links.".to_string(),
+        ));
+    }
+
+    let repo_url = &universe.repository;
+    let install_url = "https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh";
+
+    println!();
+    println!(
+        "\x1b[36mRick: Share this to invite someone to the {} Universe:\x1b[0m",
+        universe.name
+    );
+    println!();
+    println!("\x1b[97m  One-line install (Rick + Universe):\x1b[0m");
+    println!();
+    println!(
+        "    \x1b[32mcurl -fsSL {} | bash -s -- -u {}\x1b[0m",
+        install_url, repo_url
+    );
+    println!();
+    println!("\x1b[97m  If Rick is already installed:\x1b[0m");
+    println!();
+    println!("    \x1b[32mrick add {}\x1b[0m", repo_url);
+    println!();
+    println!("\x1b[90m  Universe: {} v{} — {} agents, {} workflows\x1b[0m",
+        universe.name, universe.version, agents.len(), workflows.len()
+    );
+    println!();
+
+    Ok(())
+}
+
 /// Execute the `check` command — verify all agent dependencies are satisfied.
 pub fn check() -> Result<()> {
     let cwd = env::current_dir()?;

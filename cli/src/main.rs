@@ -64,6 +64,7 @@ fn run() -> error::Result<()> {
             }
         }
         "check" => commands::check()?,
+        "invite" => commands::invite()?,
         "status" => commands::status()?,
         "init" => commands::init()?,
         "add" | "install" => {
