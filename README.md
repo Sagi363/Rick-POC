@@ -56,10 +56,16 @@ curl -fsSL https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh | 
 
 This downloads the Rick binary, installs the Claude Code skill, and creates default persona files.
 
-To install and immediately join a team's Universe:
+Try it with the [Demo Universe](https://github.com/Sagi363/Demo-Rick-Universe) — 5 agents with hilarious personalities, 3 ready-to-run workflows:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh | bash -s -- -u git@github.com:your-org/your-universe.git
+curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- -u git@github.com:Sagi363/Demo-Rick-Universe.git
+```
+
+Or join your team's Universe:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- -u git@github.com:your-org/your-universe.git
 ```
 
 ### What gets installed
