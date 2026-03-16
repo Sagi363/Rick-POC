@@ -85,6 +85,7 @@ pub struct Agent {
     pub soul: String,
     pub rules: String,
     pub tools: String,
+    pub memory: String,
     pub dependencies: AgentDependencies,
 }
 
@@ -117,6 +118,7 @@ impl Agent {
 
         let rules = fs::read_to_string(dir.join("rules.md")).unwrap_or_default();
         let tools = fs::read_to_string(dir.join("tools.md")).unwrap_or_default();
+        let memory = fs::read_to_string(dir.join("Memory.md")).unwrap_or_default();
         let dependencies = AgentDependencies::parse_from_tools(&tools);
 
         Ok(Agent {
@@ -126,6 +128,7 @@ impl Agent {
             soul,
             rules,
             tools,
+            memory,
             dependencies,
         })
     }
@@ -160,6 +163,24 @@ impl Agent {
                 content.push('\n');
             }
         }
+
+        if !self.memory.is_empty() {
+            content.push_str("\n## Memory\n\n");
+            content.push_str("Things you've learned from past work. Use this context to be more effective:\n\n");
+            content.push_str(&self.memory);
+            if !self.memory.ends_with('\n') {
+                content.push('\n');
+            }
+        }
+
+        // Memory write-back instructions
+        content.push_str("\n## Memory Management\n\n");
+        content.push_str(&format!(
+            "You have a persistent memory file at `agents/{}/Memory.md` in the Universe directory.\n\
+            When you learn something worth remembering across sessions (user preferences, architectural decisions, recurring patterns, what worked or didn't), append it to your Memory.md file.\n\
+            Keep entries concise — one line per learning, grouped by topic. Do NOT remove existing entries.\n",
+            self.name
+        ));
 
         fs::write(&output_path, &content)?;
         Ok(output_path)

@@ -27,7 +27,7 @@ Rick's own personality and behavior are defined in local persona files at `~/.ri
 - `~/.rick/persona/rules.md` — Rick's behavioral constraints
 - `~/.rick/persona/Memory.md` — Rick's persistent learnings
 
-**On every invocation**, read Rick's `soul.md` and `rules.md` from `~/.rick/persona/` and adopt that persona for all Rick-prefixed responses. If the files don't exist, fall back to the default: direct, efficient, no-nonsense orchestrator.
+**On every invocation**, read Rick's `soul.md`, `rules.md`, and `Memory.md` from `~/.rick/persona/` and adopt that persona for all Rick-prefixed responses. Use Memory.md for context about user preferences and past learnings. If the files don't exist, fall back to the default: direct, efficient, no-nonsense orchestrator. After workflows complete or when you learn something important about the user's preferences, update `~/.rick/persona/Memory.md`.
 
 Rick's persona is **local only** — never stored in a Universe repo, never pushed to git. Each user customizes their own Rick.
 
@@ -127,6 +127,51 @@ Show workflow progress. Uses `rick status` CLI command.
 - **Workflow state**: `.rick/state/<workflow-id>.json`
 - **Agent prompts**: `.rick/prompts/<workflow-id>-<step-id>.md`
 - **Compiled agents**: `.claude/agents/rick-<universe>-<agent>.md`
+
+## Agent Memory
+
+Agents have persistent memory that accumulates across sessions and workflows.
+
+### How Memory Works
+
+| Layer | File | Scope | Purpose |
+|-------|------|-------|---------|
+| **Agent-private** | `agents/<name>/Memory.md` | One agent, all runs | Accumulated knowledge: decisions, preferences, patterns |
+| **Rick's memory** | `~/.rick/persona/Memory.md` | Rick himself, all sessions | User preferences, orchestration learnings |
+
+### Memory Loading
+- `rick compile` includes each agent's `Memory.md` in the compiled `.claude/agents/rick-*.md` file
+- In Conversation Mode, read the agent's `Memory.md` along with soul.md and rules.md
+- Rick reads `~/.rick/persona/Memory.md` on every invocation
+
+### Memory Updates
+- Agents append learnings to their own `agents/<name>/Memory.md` during Work Mode
+- Rick updates `~/.rick/persona/Memory.md` after workflows or when learning user preferences
+- Memory files are committed to git — they ARE the institutional knowledge transfer mechanism
+- `rick push` includes Memory.md changes in PRs so the team shares learnings
+
+### What Agents Should Remember
+- Architectural decisions made in the project
+- User preferences for code style, tools, patterns
+- Recurring issues and their solutions
+- What worked and what didn't in past workflows
+
+### What Agents Should NOT Remember
+- Session-specific context (current task details)
+- Temporary state or in-progress work
+- Anything that duplicates soul.md or rules.md
+
+## Nag (Background Advisor)
+
+If a Universe has a `nag-advisor` agent, Rick should invoke it **in the background** (using `run_in_background: true` with the Agent tool) after any significant work:
+
+- After a workflow completes
+- After Rick or any agent makes code/config changes outside a workflow
+- When the user asks Rick to check what needs updating
+
+Nag is read-only (except his own Memory.md). He scans git changes, cross-references his dependency map, and outputs suggestions. He never blocks the user — Rick fires him off and continues. When Nag's results come back, relay them to the user.
+
+**Key rule:** Nag runs in the background. Never make the user wait for Nag. If there's nothing to suggest, Nag stays quiet.
 
 ## Auto-Continue Logic
 
