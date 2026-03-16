@@ -916,8 +916,34 @@ pub fn push() -> Result<()> {
         msg_parts.join(", ")
     };
 
+    // Generate branch name from commit message
+    let branch_slug: String = commit_msg
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let branch_name = format!("rick/{}-{}", branch_slug, timestamp % 10000);
+
     println!();
+    println!("\x1b[90m  Branch: {}\x1b[0m", branch_name);
     println!("\x1b[90m  Commit: \"{}\"\x1b[0m", commit_msg);
+
+    // Create and switch to new branch
+    let branch_status = std::process::Command::new("git")
+        .args(["checkout", "-b", &branch_name])
+        .current_dir(&cwd)
+        .status()
+        .map_err(|e| RickError::Io(e))?;
+
+    if !branch_status.success() {
+        return Err(RickError::InvalidState("Failed to create branch".to_string()));
+    }
 
     // Stage agent/workflow/config files
     let add_status = std::process::Command::new("git")
@@ -927,6 +953,11 @@ pub fn push() -> Result<()> {
         .map_err(|e| RickError::Io(e))?;
 
     if !add_status.success() {
+        // Switch back to main before erroring
+        let _ = std::process::Command::new("git")
+            .args(["checkout", "main"])
+            .current_dir(&cwd)
+            .status();
         return Err(RickError::InvalidState("git add failed".to_string()));
     }
 
@@ -938,30 +969,59 @@ pub fn push() -> Result<()> {
         .map_err(|e| RickError::Io(e))?;
 
     if !commit_status.success() {
+        let _ = std::process::Command::new("git")
+            .args(["checkout", "main"])
+            .current_dir(&cwd)
+            .status();
         return Err(RickError::InvalidState("git commit failed".to_string()));
     }
 
     println!("  \x1b[32m✓\x1b[0m Committed");
 
-    // Push
+    // Push branch to remote
     let push_status = std::process::Command::new("git")
-        .args(["push"])
+        .args(["push", "-u", "origin", &branch_name])
         .current_dir(&cwd)
         .status()
         .map_err(|e| RickError::Io(e))?;
 
     if !push_status.success() {
-        return Err(RickError::InvalidState("git push failed — you may need to push manually".to_string()));
+        return Err(RickError::InvalidState("git push failed".to_string()));
     }
 
-    println!("  \x1b[32m✓\x1b[0m Pushed to remote");
+    println!("  \x1b[32m✓\x1b[0m Pushed branch");
 
-    // Recompile
-    println!();
-    compile()?;
+    // Create PR via gh CLI
+    let pr_body = format!("## Universe Changes\n\n{}",
+        changed_files.iter()
+            .map(|l| format!("- `{}`", l.get(3..).unwrap_or(l).trim()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    let pr_output = std::process::Command::new("gh")
+        .args(["pr", "create", "--title", &commit_msg, "--body", &pr_body])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| RickError::Io(e))?;
+
+    if pr_output.status.success() {
+        let pr_url = String::from_utf8_lossy(&pr_output.stdout).trim().to_string();
+        println!("  \x1b[32m✓\x1b[0m PR created: \x1b[36m{}\x1b[0m", pr_url);
+    } else {
+        let err = String::from_utf8_lossy(&pr_output.stderr);
+        println!("  \x1b[33m!\x1b[0m Could not create PR via gh CLI: {}", err.trim());
+        println!("    Create it manually at your repo's GitHub page.");
+    }
+
+    // Switch back to main
+    let _ = std::process::Command::new("git")
+        .args(["checkout", "main"])
+        .current_dir(&cwd)
+        .status();
 
     println!();
-    println!("\x1b[32mRick: Universe changes are live. Your team can pull and recompile.\x1b[0m");
+    println!("\x1b[32mRick: PR is up. Merge it and your team gets the changes on next pull.\x1b[0m");
 
     Ok(())
 }
