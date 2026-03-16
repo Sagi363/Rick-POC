@@ -425,14 +425,14 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
     let skill_status = install_skill(&home)?;
     println!("  {} Skill        {}", skill_status.icon(), skill_status.message("~/.claude/skills/rick/SKILL.md"));
 
-    // Step 2: Create Persona
-    let soul_status = write_if_needed(
+    // Step 2: Create Persona (never overwrite — user customizations are sacred)
+    let soul_status = write_if_new(
         &format!("{}/.rick/persona/soul.md", home),
         DEFAULT_SOUL,
     )?;
     println!("  {} Persona soul {}", soul_status.icon(), soul_status.message("~/.rick/persona/soul.md"));
 
-    let rules_status = write_if_needed(
+    let rules_status = write_if_new(
         &format!("{}/.rick/persona/rules.md", home),
         DEFAULT_RULES,
     )?;
@@ -506,6 +506,22 @@ fn write_if_needed(path: &str, content: &str) -> Result<WriteStatus> {
         }
         std::fs::write(p, content)?;
         return Ok(WriteStatus::Updated);
+    }
+
+    std::fs::write(p, content)?;
+    Ok(WriteStatus::Created)
+}
+
+/// Write a file only if it doesn't exist yet. Never overwrite (persona files are user-owned).
+fn write_if_new(path: &str, content: &str) -> Result<WriteStatus> {
+    let p = std::path::Path::new(path);
+
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    if p.exists() {
+        return Ok(WriteStatus::Unchanged);
     }
 
     std::fs::write(p, content)?;
