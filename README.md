@@ -1,18 +1,26 @@
+<div align="center">
+
 # Rick
 
-Multi-agent AI orchestration for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Define teams of specialized AI agents, wire them into workflows, and share them as git repos.
+Multi-agent AI orchestration for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+Define teams of specialized AI agents, wire them into workflows, and share them as git repos.
+
+</div>
 
 ## The Problem
 
 AI coding assistants are powerful — but every developer configures them in isolation.
 
-**Workflows live in silos.** One developer crafts the perfect prompt chain: PM writes PRD → Designer specs UI → Developer implements. It works great. But it stays on their machine. The rest of the team never sees it.
+🏝️ **Workflows live in silos.**
+One developer crafts the perfect prompt chain: PM writes PRD → Designer specs UI → Developer implements. It works great — but it stays on their machine. The rest of the team never sees it.
 
-**Improvements don't propagate.** When someone figures out a better way to structure agent instructions, adds guardrails that prevent common mistakes, or tunes a workflow — those gains are local. Every other developer is still running their old version. There's no `git pull` for AI workflows.
+🔄 **Improvements don't propagate.**
+Someone figures out a better way to structure agent instructions, adds guardrails, tunes a workflow — those gains are local. Every other developer is still running their old version. There's no `git pull` for AI workflows.
 
-**Setup is a barrier.** Configuring effective AI agents requires deep knowledge of prompt engineering, MCP servers, tool permissions, and model capabilities. In practice, only the "AI expert" on the team sets things up. Everyone else gets a worse experience — or none at all.
+🚧 **Setup is a barrier.**
+Configuring effective AI agents requires prompt engineering, MCP servers, tool permissions, and model tuning. In practice, only the "AI expert" sets things up. Everyone else gets a worse experience — or none at all.
 
-Rick fixes this by making AI workflows **versionable, shareable, and installable** — just like code.
+✅ **Rick fixes this** by making AI workflows **versionable, shareable, and installable** — just like code.
 
 ## How Rick Solves It
 
@@ -37,6 +45,35 @@ That's it. Every developer now has:
 - Automatic dependency installation
 
 When the team lead pushes an improvement — a better prompt, a new workflow step, a new agent — everyone gets it on the next `git pull` + `rick compile`.
+
+## Install
+
+One line:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash
+```
+
+This downloads the Rick binary, installs the Claude Code skill, and creates default persona files.
+
+To install and immediately join a team's Universe:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- -u git@github.com:your-org/your-universe.git
+```
+
+### What gets installed
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `rick` binary | `/usr/local/bin/` or `~/.local/bin/` | CLI tool |
+| Skill | `~/.claude/skills/rick/SKILL.md` | Enables `/Rick` in Claude Code |
+| Persona | `~/.rick/persona/soul.md` + `rules.md` | Rick's personality (yours to customize) |
+
+### Requirements
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
+- Git
 
 ## Key Concepts
 
@@ -111,35 +148,6 @@ steps:
 ```
 
 Each step invokes a specific agent with a task. `checkpoint: true` pauses for your review before continuing. Each agent receives the output of previous steps as context.
-
-## Install
-
-One line:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash
-```
-
-This downloads the Rick binary, installs the Claude Code skill, and creates default persona files.
-
-To install and immediately join a team's Universe:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh | bash -s -- -u git@github.com:your-org/your-universe.git
-```
-
-### What gets installed
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `rick` binary | `/usr/local/bin/` or `~/.local/bin/` | CLI tool |
-| Skill | `~/.claude/skills/rick/SKILL.md` | Enables `/Rick` in Claude Code |
-| Persona | `~/.rick/persona/soul.md` + `rules.md` | Rick's personality (yours to customize) |
-
-### Requirements
-
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
-- Git
 
 ## Creating a Universe
 
