@@ -1,5 +1,6 @@
 <div align="center">
-<pre>
+<table style="border: none; border-collapse: collapse;"><tr><td style="border: none; padding: 0;">
+<pre style="border: none; background: transparent; margin: 0; padding: 8px;">
 _____  _      _
 |  __ \(_)    | |
 | |__) |_  ___| | __
@@ -7,6 +8,7 @@ _____  _      _
 | | \ \| | (__|   <
 |_|  \_\_|\___|_|\_\
 </pre>
+</td></tr></table>
 </div>
 
 <p align="center">
