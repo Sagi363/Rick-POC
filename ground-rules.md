@@ -42,9 +42,15 @@ Agent sprawl defeats the purpose of a shared Universe. Before creating a new age
 ### Detection Protocol
 
 When a user requests a new agent, Rick:
-1. Reads EVERY existing agent's `soul.md` in the target Universe
-2. Compares the proposed agent's responsibilities against each existing agent
-3. If >20% of the proposed responsibilities are already covered by one or more existing agents → **BLOCK creation**
+1. Reads EVERY existing agent's `soul.md` AND `rules.md` in the target Universe
+2. Compares the proposed agent's responsibilities (soul) and domain rules (rules) against each existing agent
+3. If >20% of the proposed responsibilities OR domain rules are already covered by one or more existing agents → **BLOCK creation**
+
+**What to compare:**
+- `soul.md` — expertise, responsibilities, "what the agent does"
+- `rules.md` — behavioral constraints, domain knowledge, "how the agent works and what domain rules it enforces"
+- Skip `tools.md` — shared toolsets (Read/Write/Edit) don't indicate responsibility overlap
+- Skip `Memory.md` — runtime learnings are ephemeral, not identity
 
 ### When Overlap Is Detected
 
