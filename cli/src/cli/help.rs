@@ -1,6 +1,6 @@
 /// Print version information.
 pub fn print_version() {
-    println!("rick v0.1.0");
+    println!("rick v{}", env!("CARGO_PKG_VERSION"));
 }
 
 /// Print help/usage information.
@@ -10,7 +10,7 @@ pub fn print_help() {
     println!("Usage: rick <command> [options]");
     println!();
     println!("Commands:");
-    println!("  setup [options]     Onboarding wizard: install skill, persona, permissions");
+    println!("  setup [options]     Onboarding wizard: install skill, persona, permissions, auto-update");
     println!("  add <url> [-n name] Clone an existing Universe and compile its agents");
     println!("  init                Initialize a new Rick universe");
     println!("  compile             Compile agents to Claude Code sub-agents");

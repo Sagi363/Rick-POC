@@ -12,6 +12,12 @@ use crate::parsers::json::{self, JsonValue};
 /// Embedded SKILL.md content — compiled into the binary via include_str!().
 const SKILL_CONTENT: &str = include_str!("../../../integrations/claude-code/skill/SKILL.md");
 
+/// URL for the ground rules file on the main branch.
+const GROUND_RULES_URL: &str = "https://raw.githubusercontent.com/Sagi363/Rick-POC/main/ground-rules.md";
+
+/// GitHub API URL for the latest release.
+const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Sagi363/Rick-POC/releases/latest";
+
 /// Default Rick persona soul — opinionated, ships with personality.
 const DEFAULT_SOUL: &str = r#"# Rick's Soul
 
@@ -328,6 +334,15 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
         name, url
     );
 
+    // Fetch/update ground rules on every add
+    let home = env::var("HOME").unwrap_or_default();
+    if !home.is_empty() {
+        let gr_status = fetch_ground_rules(&home)?;
+        if matches!(gr_status, WriteStatus::Created | WriteStatus::Updated) {
+            println!("  {} Ground rules {}", gr_status.icon(), gr_status.message("~/.rick/ground-rules.md"));
+        }
+    }
+
     // Clone the repo into universes/
     let status = std::process::Command::new("git")
         .args(["clone", url, &target.to_string_lossy()])
@@ -447,6 +462,9 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
     println!("\x1b[36mRick: Running setup...\x1b[0m");
     println!();
 
+    // Step 0: Self-update — check for newer binary
+    let _updated = self_update()?;
+
     // Step 1: Install Skill
     let skill_status = install_skill(&home)?;
     println!("  {} Skill        {}", skill_status.icon(), skill_status.message("~/.claude/skills/rick/ + Rick/"));
@@ -469,6 +487,10 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
         DEFAULT_MEMORY,
     )?;
     println!("  {} Memory       {}", memory_status.icon(), memory_status.message("~/.rick/persona/Memory.md"));
+
+    // Step 2b: Fetch ground rules from GitHub
+    let gr_status = fetch_ground_rules(&home)?;
+    println!("  {} Ground rules {}", gr_status.icon(), gr_status.message("~/.rick/ground-rules.md"));
 
     // Step 3: Permissions guidance
     println!();
@@ -752,6 +774,184 @@ fn write_project_permissions(path: &str, perms: &[&str]) -> Result<()> {
     std::fs::write(p, format!("{}\n", output))?;
 
     Ok(())
+}
+
+/// Fetch ground rules from the Rick-POC main branch and store at ~/.rick/ground-rules.md.
+fn fetch_ground_rules(home: &str) -> Result<WriteStatus> {
+    let target_path = format!("{}/.rick/ground-rules.md", home);
+    let p = std::path::Path::new(&target_path);
+
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Fetch via curl
+    let output = std::process::Command::new("curl")
+        .args(["-fsSL", GROUND_RULES_URL])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let content = String::from_utf8_lossy(&out.stdout).to_string();
+            if content.trim().is_empty() || !content.contains("# Rick Ground Rules") {
+                // Bad response — skip silently
+                if p.exists() {
+                    return Ok(WriteStatus::Unchanged);
+                }
+                return Ok(WriteStatus::Unchanged);
+            }
+            // Check if content changed
+            if p.exists() {
+                let existing = std::fs::read_to_string(p)?;
+                if existing == content {
+                    return Ok(WriteStatus::Unchanged);
+                }
+                std::fs::write(p, &content)?;
+                return Ok(WriteStatus::Updated);
+            }
+            std::fs::write(p, &content)?;
+            Ok(WriteStatus::Created)
+        }
+        _ => {
+            // Network failure — not fatal, just warn
+            if p.exists() {
+                Ok(WriteStatus::Unchanged)
+            } else {
+                println!("  \x1b[33m!\x1b[0m Ground rules  Could not fetch (no network?) — skipped");
+                Ok(WriteStatus::Unchanged)
+            }
+        }
+    }
+}
+
+/// Self-update: check GitHub releases for a newer version and replace the current binary.
+fn self_update() -> Result<bool> {
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    // Fetch latest release tag from GitHub API
+    let output = std::process::Command::new("curl")
+        .args(["-fsSL", "-H", "Accept: application/vnd.github.v3+json", LATEST_RELEASE_URL])
+        .output();
+
+    let tag = match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout);
+            // Simple extraction: find "tag_name":"vX.Y.Z"
+            extract_json_string(&body, "tag_name").unwrap_or_default()
+        }
+        _ => return Ok(false),
+    };
+
+    if tag.is_empty() {
+        return Ok(false);
+    }
+
+    let remote_version = tag.trim_start_matches('v');
+    if remote_version == current_version {
+        return Ok(false);
+    }
+
+    // Detect platform
+    let os = if cfg!(target_os = "macos") { "darwin" } else { "linux" };
+    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "amd64" };
+
+    let download_url = format!(
+        "https://github.com/Sagi363/Rick-POC/releases/download/{}/rick-{}-{}",
+        tag, os, arch
+    );
+
+    println!(
+        "  \x1b[33m↻\x1b[0m Update       v{} -> v{} available",
+        current_version, remote_version
+    );
+
+    // Download to temp file
+    let tmp_path = "/tmp/rick-update-bin";
+    let dl_status = std::process::Command::new("curl")
+        .args(["-fsSL", "-o", tmp_path, &download_url])
+        .status();
+
+    match dl_status {
+        Ok(s) if s.success() => {}
+        _ => {
+            println!("  \x1b[33m!\x1b[0m Update       Download failed — skipping");
+            return Ok(false);
+        }
+    }
+
+    // Make executable
+    let _ = std::process::Command::new("chmod")
+        .args(["+x", tmp_path])
+        .status();
+
+    // Verify it runs
+    let verify = std::process::Command::new(tmp_path)
+        .args(["--version"])
+        .output();
+
+    match verify {
+        Ok(out) if out.status.success() => {}
+        _ => {
+            println!("  \x1b[33m!\x1b[0m Update       Downloaded binary invalid — skipping");
+            let _ = std::fs::remove_file(tmp_path);
+            return Ok(false);
+        }
+    }
+
+    // Find where the current binary is installed
+    let current_exe = env::current_exe().map_err(|e| RickError::Io(e))?;
+    let install_path = current_exe.to_string_lossy().to_string();
+
+    // Try to replace — may need sudo
+    let cp_status = std::process::Command::new("cp")
+        .args([tmp_path, &install_path])
+        .status();
+
+    match cp_status {
+        Ok(s) if s.success() => {
+            println!(
+                "  \x1b[32m✓\x1b[0m Update       Updated to v{} \x1b[90m({})\x1b[0m",
+                remote_version, install_path
+            );
+            let _ = std::fs::remove_file(tmp_path);
+            Ok(true)
+        }
+        _ => {
+            // Try with sudo
+            let sudo_status = std::process::Command::new("sudo")
+                .args(["cp", tmp_path, &install_path])
+                .status();
+
+            match sudo_status {
+                Ok(s) if s.success() => {
+                    println!(
+                        "  \x1b[32m✓\x1b[0m Update       Updated to v{} \x1b[90m({})\x1b[0m",
+                        remote_version, install_path
+                    );
+                    let _ = std::fs::remove_file(tmp_path);
+                    Ok(true)
+                }
+                _ => {
+                    println!("  \x1b[33m!\x1b[0m Update       Could not replace binary at {} — update manually", install_path);
+                    println!("               \x1b[90msudo cp {} {}\x1b[0m", tmp_path, install_path);
+                    Ok(false)
+                }
+            }
+        }
+    }
+}
+
+/// Extract a string value from a JSON body by key (simple, no full parser needed).
+fn extract_json_string(json: &str, key: &str) -> Option<String> {
+    let pattern = format!("\"{}\"", key);
+    let start = json.find(&pattern)?;
+    let after_key = &json[start + pattern.len()..];
+    // Skip whitespace and colon
+    let after_colon = after_key.find(':').map(|i| &after_key[i + 1..])?;
+    let quote_start = after_colon.find('"')?;
+    let value_start = &after_colon[quote_start + 1..];
+    let quote_end = value_start.find('"')?;
+    Some(value_start[..quote_end].to_string())
 }
 
 /// Install MCP dependencies declared by agents in the current Universe.
