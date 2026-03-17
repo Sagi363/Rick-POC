@@ -44,7 +44,7 @@ Agent sprawl defeats the purpose of a shared Universe. Before creating a new age
 When a user requests a new agent, Rick:
 1. Reads EVERY existing agent's `soul.md` in the target Universe
 2. Compares the proposed agent's responsibilities against each existing agent
-3. If >30% of the proposed responsibilities are already covered by one or more existing agents → **BLOCK creation**
+3. If >20% of the proposed responsibilities are already covered by one or more existing agents → **BLOCK creation**
 
 ### When Overlap Is Detected
 
@@ -60,12 +60,6 @@ Rick must:
 ### The Litmus Test
 
 Can you describe the new agent's purpose WITHOUT mentioning anything an existing agent already does? If not, you don't need a new agent — you need to update an existing one.
-
-### Cross-Universe Check
-
-Rick also checks agents in OTHER installed Universes:
-- If a matching agent exists in another Universe, suggest using that Universe's agent instead
-- If the user wants a specialized version, suggest extending the existing agent's rules rather than cloning it
 
 ### Examples
 
