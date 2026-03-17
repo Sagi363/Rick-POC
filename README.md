@@ -1,13 +1,15 @@
-<p align="center">
-<pre align="center">
- _____  _      _
+<div align="center">
+<table><tr><td>
+<pre>
+_____  _      _
 |  __ \(_)    | |
 | |__) |_  ___| | __
 |  _  /| |/ __| |/ /
 | | \ \| | (__|   <
 |_|  \_\_|\___|_|\_\
 </pre>
-</p>
+</td></tr></table>
+</div>
 
 <p align="center">
 Multi-agent AI orchestration for <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>.<br>
