@@ -2,11 +2,11 @@
 
 <pre>
  _____  _      _
-|  __ \(_)    | |
+|  __ &#92;(_)    | |
 | |__) |_  ___| | __
 |  _  /| |/ __| |/ /
-| | \ \| | (__|   <
-|_|  \_\_|\___|_|\_\
+| | &#92; &#92;| | (__|   &lt;
+|_|  &#92;_&#92;_|&#92;___|_|&#92;_&#92;
 </pre>
 
 Multi-agent AI orchestration for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
