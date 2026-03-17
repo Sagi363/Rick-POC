@@ -16,7 +16,7 @@ pub fn print_help() {
     println!("  compile             Compile agents to Claude Code sub-agents");
     println!("  check               Verify all agent dependencies (MCPs, skills)");
     println!("  push                Commit and push Universe changes, then recompile");
-    println!("  invite              Generate a shareable install link for this Universe");
+    println!("  invite [users...]   Invite GitHub users as collaborators + show install link");
     println!("  list agents         List all agents in the universe");
     println!("  list workflows      List all workflows in the universe");
     println!("  run <workflow> [-f] Start a workflow (--force to skip dep checks)");

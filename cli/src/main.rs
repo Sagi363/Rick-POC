@@ -64,7 +64,13 @@ fn run() -> error::Result<()> {
             }
         }
         "check" => commands::check()?,
-        "invite" => commands::invite()?,
+        "invite" => {
+            let emails: Vec<&str> = args[1..].iter()
+                .filter(|a| !a.starts_with('-'))
+                .map(|s| s.as_str())
+                .collect();
+            commands::invite(&emails)?;
+        }
         "status" => commands::status()?,
         "init" => commands::init()?,
         "add" | "install" => {

@@ -132,6 +132,13 @@ Execute the next step of the active workflow (uses Work Mode).
 ### /rick status
 Show workflow progress. Uses `rick status` CLI command.
 
+### /rick invite [github-usernames...]
+Invite collaborators to the Universe and show install links.
+- No args: just shows shareable install links
+- With usernames: adds each as a GitHub collaborator (push access) via `gh api`, then shows links
+- If Rick lacks admin access to the repo, it tells you instead of failing silently
+- Uses `rick invite [users...]` CLI command
+
 ## State Files
 
 - **Workflow state**: `.rick/state/<workflow-id>.json`

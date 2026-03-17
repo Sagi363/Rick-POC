@@ -1006,7 +1006,7 @@ fn install_agent_deps() -> Result<()> {
 }
 
 /// Execute the `invite` command — generate a shareable install command for the current Universe.
-pub fn invite() -> Result<()> {
+pub fn invite(emails: &[&str]) -> Result<()> {
     let cwd = env::current_dir()?;
     let universe = Universe::load(&cwd)?;
     let agents = agent::load_agents(&universe)?;
@@ -1019,9 +1019,68 @@ pub fn invite() -> Result<()> {
     }
 
     let repo_url = &universe.repository;
+
+    // Extract GitHub owner/repo from repository URL (SSH or HTTPS)
+    let gh_repo = extract_gh_repo(repo_url);
+
+    // If emails provided, add them as collaborators
+    if !emails.is_empty() {
+        if let Some(ref repo) = gh_repo {
+            // Check if gh CLI is available
+            let gh_check = std::process::Command::new("gh")
+                .args(["auth", "status"])
+                .output();
+
+            match gh_check {
+                Ok(output) if output.status.success() => {
+                    for email in emails {
+                        println!("\x1b[36mRick: Inviting {} to {}...\x1b[0m", email, repo);
+                        let result = std::process::Command::new("gh")
+                            .args(["api", &format!("repos/{}/collaborators/{}", repo, email),
+                                   "--method", "PUT",
+                                   "--field", "permission=push"])
+                            .output();
+
+                        match result {
+                            Ok(out) if out.status.success() => {
+                                println!("  \x1b[32m✓ Invitation sent to {}\x1b[0m", email);
+                            }
+                            Ok(out) => {
+                                let stderr = String::from_utf8_lossy(&out.stderr);
+                                let stdout = String::from_utf8_lossy(&out.stdout);
+                                if stderr.contains("403") || stdout.contains("403")
+                                    || stderr.contains("Must have admin access")
+                                    || stdout.contains("Must have admin access")
+                                {
+                                    println!("  \x1b[31m✗ Permission denied for {}. You need admin access to {} to add collaborators.\x1b[0m", email, repo);
+                                } else if stderr.contains("404") || stdout.contains("404") {
+                                    println!("  \x1b[31m✗ GitHub user '{}' not found. Use their GitHub username, not email.\x1b[0m", email);
+                                } else {
+                                    println!("  \x1b[31m✗ Failed to invite {}: {}{}\x1b[0m", email, stderr, stdout);
+                                }
+                            }
+                            Err(e) => {
+                                println!("  \x1b[31m✗ Failed to run gh: {}\x1b[0m", e);
+                            }
+                        }
+                    }
+                    println!();
+                }
+                _ => {
+                    println!("\x1b[31mRick: 'gh' CLI not authenticated. Run 'gh auth login' first to invite collaborators.\x1b[0m");
+                    println!("\x1b[90m  Showing install links instead.\x1b[0m");
+                    println!();
+                }
+            }
+        } else {
+            println!("\x1b[31mRick: Can't parse GitHub repo from '{}'. Invite collaborators manually.\x1b[0m", repo_url);
+            println!();
+        }
+    }
+
+    // Always show install links
     let install_url = "https://raw.githubusercontent.com/Sagi363/Rick-POC/main/install.sh";
 
-    println!();
     println!(
         "\x1b[36mRick: Share this to invite someone to the {} Universe:\x1b[0m",
         universe.name
@@ -1044,6 +1103,23 @@ pub fn invite() -> Result<()> {
     println!();
 
     Ok(())
+}
+
+/// Extract "owner/repo" from a GitHub URL (SSH or HTTPS).
+fn extract_gh_repo(url: &str) -> Option<String> {
+    // git@github.com:Owner/Repo.git or git@github.com-alias:Owner/Repo.git
+    if url.contains("github.com") && url.contains(':') && url.starts_with("git@") {
+        let after_colon = url.split(':').last()?;
+        let repo = after_colon.trim_end_matches(".git");
+        return Some(repo.to_string());
+    }
+    // https://github.com/Owner/Repo.git
+    if url.contains("github.com/") {
+        let after_gh = url.split("github.com/").last()?;
+        let repo = after_gh.trim_end_matches(".git");
+        return Some(repo.to_string());
+    }
+    None
 }
 
 /// Execute the `push` command — commit and push Universe changes, then recompile.
