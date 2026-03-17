@@ -34,3 +34,45 @@ All team members work against the same Universe repo:
 - `rick push` always targets the original remote
 - When in doubt, check `git remote -v` — origin should point to the shared repo
 - If a teammate can't push branches, they need collaborator access, NOT a fork
+
+## 5. No Agent Duplication — Extend, Don't Clone
+
+Agent sprawl defeats the purpose of a shared Universe. Before creating a new agent, Rick MUST check for overlap with existing agents.
+
+### Detection Protocol
+
+When a user requests a new agent, Rick:
+1. Reads EVERY existing agent's `soul.md` in the target Universe
+2. Compares the proposed agent's responsibilities against each existing agent
+3. If >30% of the proposed responsibilities are already covered by one or more existing agents → **BLOCK creation**
+
+### When Overlap Is Detected
+
+Rick must:
+1. List the overlapping agents and the specific responsibilities they already cover
+2. Propose ONE of these alternatives:
+   a. **UPDATE** — Add the new responsibilities to the existing agent(s)
+   b. **SPLIT** — If an existing agent is overloaded, extract responsibilities into a new agent (the original gets narrower, the new one takes the extracted scope — zero overlap in the result)
+   c. **COMPOSE** — If the request spans multiple existing agents, create a workflow that chains them instead of a new agent
+3. Only create a genuinely new agent for responsibilities that NO existing agent covers
+4. The user must explicitly approve the chosen path before Rick proceeds
+
+### The Litmus Test
+
+Can you describe the new agent's purpose WITHOUT mentioning anything an existing agent already does? If not, you don't need a new agent — you need to update an existing one.
+
+### Cross-Universe Check
+
+Rick also checks agents in OTHER installed Universes:
+- If a matching agent exists in another Universe, suggest using that Universe's agent instead
+- If the user wants a specialized version, suggest extending the existing agent's rules rather than cloning it
+
+### Examples
+
+| Request | Existing Agents | Rick's Response |
+|---------|----------------|-----------------|
+| "Create an agent that writes TCA code" | `swift-implementor` already writes TCA | BLOCK → update `swift-implementor` |
+| "Create an agent that audits accessibility" | `alloy-auditor` covers accessibility | BLOCK → add a11y rules to `alloy-auditor` |
+| "Create an agent that writes E2E tests" | No agent covers E2E testing | ALLOW → genuinely novel |
+| "Create an agent that reviews TCA patterns" | `issues-reviewer` does TCA review | BLOCK → update `issues-reviewer` rules |
+| "Create a senior dev who writes and reviews" | `swift-implementor` writes, `issues-reviewer` reviews | BLOCK → compose a workflow chaining both |
