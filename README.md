@@ -1,6 +1,13 @@
 <div align="center">
 
-# Rick
+```
+ _____  _      _
+|  __ \(_)    | |
+| |__) |_  ___| | __
+|  _  /| |/ __| |/ /
+| | \ \| | (__|   <
+|_|  \_\_|\___|_|\_\
+```
 
 Multi-agent AI orchestration for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 Define teams of specialized AI agents, wire them into workflows, and share them as git repos.
