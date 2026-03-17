@@ -1,5 +1,5 @@
 <div align="center">
-<table><tr><td>
+<table border="0" cellspacing="0" cellpadding="0"><tr><td>
 <pre>
 _____  _      _
 |  __ \(_)    | |
