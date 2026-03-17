@@ -1,5 +1,4 @@
 <div align="center">
-<table border="0" cellspacing="0" cellpadding="0"><tr><td>
 <pre>
 _____  _      _
 |  __ \(_)    | |
@@ -8,7 +7,6 @@ _____  _      _
 | | \ \| | (__|   <
 |_|  \_\_|\___|_|\_\
 </pre>
-</td></tr></table>
 </div>
 
 <p align="center">
