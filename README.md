@@ -1,18 +1,18 @@
-<div align="center">
-
-<pre>
+<p align="center">
+<pre align="center">
  _____  _      _
-|  __ &#92;(_)    | |
+|  __ \(_)    | |
 | |__) |_  ___| | __
 |  _  /| |/ __| |/ /
-| | &#92; &#92;| | (__|   &lt;
-|_|  &#92;_&#92;_|&#92;___|_|&#92;_&#92;
+| | \ \| | (__|   <
+|_|  \_\_|\___|_|\_\
 </pre>
+</p>
 
-Multi-agent AI orchestration for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+<p align="center">
+Multi-agent AI orchestration for <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>.<br>
 Define teams of specialized AI agents, wire them into workflows, and share them as git repos.
-
-</div>
+</p>
 
 ## The Problem
 
