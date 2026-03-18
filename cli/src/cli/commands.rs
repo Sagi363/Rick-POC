@@ -5,6 +5,7 @@ use crate::error::{RickError, Result};
 use crate::core::agent;
 use crate::core::deps;
 use crate::core::state::{self, WorkflowState, StepState};
+use crate::core::template::{self, TemplateType};
 use crate::core::universe::Universe;
 use crate::core::workflow;
 use crate::parsers::json::{self, JsonValue};
@@ -144,6 +145,13 @@ pub fn compile() -> Result<()> {
         if !changes.trim().is_empty() {
             println!();
             println!("\x1b[90m  Tip: Run `rick push` to share these changes with your team.\x1b[0m");
+        }
+    }
+
+    // Template hint (informational only)
+    if let Ok(templates) = template::detect_templates(&cwd) {
+        if !templates.is_empty() {
+            println!("\x1b[90m  Tip: This Universe has templates in .rick/templates/\x1b[0m");
         }
     }
 
@@ -1286,12 +1294,31 @@ pub fn push() -> Result<()> {
     println!("  \x1b[32m✓\x1b[0m Pushed branch");
 
     // Create PR via gh CLI
-    let pr_body = format!("## Universe Changes\n\n{}",
+    let mut pr_body = format!("## Universe Changes\n\n{}",
         changed_files.iter()
             .map(|l| format!("- `{}`", l.get(3..).unwrap_or(l).trim()))
             .collect::<Vec<_>>()
             .join("\n")
     );
+
+    // Template compliance audit (Task 8)
+    if !modified_agents.is_empty() {
+        if let Ok(Some(tmpl)) = template::get_template(&cwd, TemplateType::Agent) {
+            let mut all_findings = Vec::new();
+            for agent_name in &modified_agents {
+                let agent_dir = cwd.join("agents").join(agent_name);
+                if let Ok(a) = agent::Agent::load(&agent_dir) {
+                    let findings = template::audit_agent_against_template(&a, &tmpl);
+                    all_findings.extend(findings);
+                }
+            }
+            if !all_findings.is_empty() {
+                let report = template::format_compliance_report(&all_findings, &tmpl);
+                pr_body.push_str("\n\n");
+                pr_body.push_str(&report);
+            }
+        }
+    }
 
     let pr_output = std::process::Command::new("gh")
         .args(["pr", "create", "--title", &commit_msg, "--body", &pr_body])
