@@ -21,9 +21,9 @@ All changes to a Universe go through branches and pull requests:
 
 ## 3. Agent Definitions Are Sacred — PR Only
 
-Agent persona files (soul.md, rules.md, tools.md) define shared team behavior:
-- NEVER modify another agent's soul.md, rules.md, or tools.md directly on main
-- All changes to agent definitions MUST go through a branch + PR
+Agent persona files (soul.md, rules.md, tools.md) and skill files (skill.md) define shared team behavior:
+- NEVER modify another agent's soul.md, rules.md, or tools.md — or any skill.md — directly on main
+- All changes to agent definitions and skill definitions MUST go through a branch + PR
 - Memory.md is the only file agents can update during work — and even that gets PR'd back via `rick push`
 - This ensures the whole team reviews personality/behavior changes before they take effect
 
