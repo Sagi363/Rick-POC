@@ -274,8 +274,14 @@ if [[ -n "$INSTALL_DEPS" ]]; then
     SETUP_ARGS="$SETUP_ARGS $INSTALL_DEPS"
 fi
 
-# Run setup — pass through to rick setup (interactive)
-"$RICK_PATH" setup $SETUP_ARGS
+# Run setup — redirect stdin from /dev/tty so interactive prompts work
+# even when install.sh is piped (curl ... | bash)
+if [ -e /dev/tty ]; then
+    "$RICK_PATH" setup $SETUP_ARGS < /dev/tty
+else
+    # No TTY (Docker, CI) — fall back to non-interactive
+    "$RICK_PATH" setup $SETUP_ARGS --non-interactive
+fi
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 

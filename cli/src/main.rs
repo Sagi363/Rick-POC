@@ -89,14 +89,15 @@ fn run() -> error::Result<()> {
         "next" => commands::next()?,
         "push" => commands::push()?,
         "setup" => {
-            // Parse flags: --universe <url>, --install-deps
+            // Parse flags: --universe <url>, --install-deps, --non-interactive
             let universe_url = args.windows(2)
                 .find(|w| w[0] == "--universe" || w[0] == "-u")
                 .map(|w| w[1].as_str());
 
             let install_deps = args.iter().any(|a| a == "--install-deps");
+            let non_interactive = args.iter().any(|a| a == "--non-interactive");
 
-            commands::setup(universe_url, install_deps)?;
+            commands::setup(universe_url, install_deps, non_interactive)?;
         }
         other => {
             eprintln!(
