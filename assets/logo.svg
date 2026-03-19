@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120" fill="none">
+  <style>
+    text { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 16px; fill: #e6edf3; }
+    @media (prefers-color-scheme: light) { text { fill: #1f2328; } }
+  </style>
+  <text x="50%" y="20" text-anchor="middle" xml:space="preserve"> _____  _      _    </text>
+  <text x="50%" y="38" text-anchor="middle" xml:space="preserve">|  __ \(_)    | |   </text>
+  <text x="50%" y="56" text-anchor="middle" xml:space="preserve">| |__) |_  ___| | __</text>
+  <text x="50%" y="74" text-anchor="middle" xml:space="preserve">|  _  /| |/ __| |/ /</text>
+  <text x="50%" y="92" text-anchor="middle" xml:space="preserve">| | \ \| | (__|   &lt; </text>
+  <text x="50%" y="110" text-anchor="middle" xml:space="preserve">|_|  \_\_|\___|_|\_\</text>
+</svg>
