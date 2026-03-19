@@ -240,6 +240,49 @@ pre .prompt { animation: pulse 2s ease-in-out infinite; }
 
 /* Keyword highlights inside bullets */
 .kw { color: #7ec8e3; font-weight: bold; }
+
+/* Navigation arrows */
+.nav-arrows {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  z-index: 100;
+}
+
+.nav-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid #3d3d5c;
+  background: #1a1a2e;
+  color: #7ec8e3;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease, border-color 150ms ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-btn:hover {
+  background: #2d2d3f;
+  border-color: #7ec8e3;
+}
+
+.nav-btn:active {
+  background: #3d3d5c;
+}
+
+.nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+  pointer-events: none;
+}
 </style>
 </head>
 <body>
@@ -521,7 +564,12 @@ pre .prompt { animation: pulse 2s ease-in-out infinite; }
 
 </div><!-- viewport -->
 
-<div class="counter" id="counter">1 / 11</div>
+<div class="nav-arrows">
+  <button class="nav-btn" id="prevBtn" aria-label="Previous slide">&#x25C0;</button>
+  <button class="nav-btn" id="nextBtn" aria-label="Next slide">&#x25B6;</button>
+</div>
+
+<div class="counter" id="counter">1 / 12</div>
 
 <script>
 (function() {
@@ -530,14 +578,26 @@ pre .prompt { animation: pulse 2s ease-in-out infinite; }
   var total = slides.length;
   var counter = document.getElementById('counter');
   var viewport = document.getElementById('viewport');
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+
+  function updateNav() {
+    counter.textContent = current + ' / ' + total;
+    prevBtn.disabled = current <= 1;
+    nextBtn.disabled = current >= total;
+  }
 
   function go(n) {
     if (n < 1 || n > total) return;
     slides[current - 1].classList.remove('active');
     current = n;
     slides[current - 1].classList.add('active');
-    counter.textContent = current + ' / ' + total;
+    updateNav();
   }
+
+  prevBtn.addEventListener('click', function() { go(current - 1); });
+  nextBtn.addEventListener('click', function() { go(current + 1); });
+  updateNav();
 
   function scaleViewport() {
     var sw = window.innerWidth;
