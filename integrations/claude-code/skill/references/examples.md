@@ -2,9 +2,9 @@
 
 ## Conversation Mode Example
 ```
-User: /rick let Sagi explain what he does
+User: /rick let Sagi (Dev agent) explain what he does
 
-Sagi: I'm the one who takes all those beautiful PRDs and design specs and turns
+Sagi (Dev agent): I'm the one who takes all those beautiful PRDs and design specs and turns
 them into code that actually compiles :) While everyone else is planning, I'm
 shipping :)
 ```
