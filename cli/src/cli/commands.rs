@@ -1411,26 +1411,41 @@ pub fn check() -> Result<()> {
     Ok(())
 }
 
-/// Self-update: re-run the install script to get the latest Rick binary, skill, and ground rules.
-const INSTALL_SCRIPT_URL: &str =
-    "https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh";
-
 pub fn update() -> Result<()> {
+    let current_version = env!("CARGO_PKG_VERSION");
     println!("\x1b[36mRick: Checking for updates...\x1b[0m");
+    println!("  \x1b[90mCurrent version: v{}\x1b[0m", current_version);
     println!();
 
-    let status = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(format!("curl -fsSL {} | bash", INSTALL_SCRIPT_URL))
-        .status()
-        .map_err(|e| RickError::Io(e))?;
+    // Step 1: Update the binary via self_update() (fetches latest release, downloads, replaces)
+    let binary_updated = self_update()?;
 
-    if status.success() {
-        println!();
+    if !binary_updated {
+        println!("  \x1b[32m✓\x1b[0m Binary        Already up to date (v{})", current_version);
+    }
+
+    // Step 2: Refresh skill file
+    let home = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    match install_skill(&home) {
+        Ok(WriteStatus::Updated) => println!("  \x1b[32m✓\x1b[0m Skill         Updated"),
+        Ok(WriteStatus::Created) => println!("  \x1b[32m✓\x1b[0m Skill         Installed"),
+        Ok(WriteStatus::Unchanged) => println!("  \x1b[90m-\x1b[0m Skill         Up to date"),
+        Err(e) => println!("  \x1b[33m!\x1b[0m Skill         Failed: {}", e),
+    }
+
+    // Step 3: Refresh ground rules
+    match fetch_ground_rules(&home) {
+        Ok(WriteStatus::Updated) => println!("  \x1b[32m✓\x1b[0m Ground rules  Updated"),
+        Ok(WriteStatus::Created) => println!("  \x1b[32m✓\x1b[0m Ground rules  Installed"),
+        Ok(WriteStatus::Unchanged) => println!("  \x1b[90m-\x1b[0m Ground rules  Up to date"),
+        Err(e) => println!("  \x1b[33m!\x1b[0m Ground rules  Failed: {}", e),
+    }
+
+    println!();
+    if binary_updated {
         println!("\x1b[32mRick: Update complete.\x1b[0m");
     } else {
-        eprintln!("\x1b[31mRick: Update failed (exit code {:?}).\x1b[0m", status.code());
-        return Err(RickError::InvalidState("Update script failed".to_string()));
+        println!("\x1b[32mRick: Everything is up to date.\x1b[0m");
     }
 
     Ok(())
