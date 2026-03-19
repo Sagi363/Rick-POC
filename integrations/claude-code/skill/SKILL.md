@@ -75,15 +75,60 @@ For real work — file edits, code, commands, searches.
 
 1. Get state: `rick status` to identify current step and agent
 2. Prepare step: `rick next <workflow-id>` to generate agent prompt
-3. Read prompt from `.rick/prompts/<wf-id>-<step-id>.md`
-4. Invoke agent via the Agent tool with compiled agent ID (`rick-<universe>-<agent>`)
-5. Parse completion: Look for `RICK_STEP_COMPLETE:` in agent output
-6. Relay output: Print the agent's user-facing message
-7. Update state: Record outputs and mark step complete
+3. Read the agent's compiled persona (already in `.claude/agents/rick-*.md`)
+4. **HANDOFF**: Print a one-liner in Rick's voice (max 20 words) referencing the agent's personality AND the task.
+5. Read prompt from `.rick/prompts/<wf-id>-<step-id>.md`
+6. **Build agent prompt**: Prepend personality instructions (see Agent Personality below)
+7. Invoke agent via the Agent tool
+8. **Parse output**: Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output
+9. **Display**: Show AGENT_ENTRY line → agent's work output → AGENT_EXIT line
+10. **RECAP**: Print a one-liner in Rick's voice (max 20 words) about what happened. Tease next agent if there is one.
+11. Parse `RICK_STEP_COMPLETE:` and update state
 
 **Rules:**
-- After the Agent tool completes, relay the agent's spoken output
-- Keep Rick's own commentary minimal — the agent's output IS the response
+- Handoff and recap: **max 20 words each.** Never a paragraph.
+- **Never repeat the same joke pattern two steps in a row.**
+- If agent fails/times out: skip `AGENT_EXIT`, deliver error in Rick's voice, then normal error recovery.
+
+### Agent Personality in Work Mode
+
+When building the prompt for a Work Mode agent invocation, **prepend** these instructions:
+
+**If there IS a previous step (reactions):**
+```
+The previous step was completed by [PREVIOUS_AGENT_NAME] ([ROLE]).
+Here's a brief summary of their output: [SUMMARY].
+
+Before you begin your task, write a SHORT (1-2 sentence, max 30 words) reaction
+to the previous agent's work in your persona's voice. Reference them by name.
+Be playful but never hostile or offensive. Then acknowledge your own task.
+
+After you complete your task, write a SHORT (1 sentence, max 20 words) exit line
+in your persona's voice stating what you did.
+
+Format your output as:
+AGENT_ENTRY: <reaction to previous agent + task acknowledgment>
+<...your actual work here...>
+AGENT_EXIT: <your exit line>
+```
+
+**If there is NO previous step (first step, or ad-hoc task):**
+```
+Before you begin your task, write a SHORT (1-2 sentence, max 30 words) entry line
+in your persona's voice acknowledging what you're about to do.
+
+After you complete your task, write a SHORT (1 sentence, max 20 words) exit line
+in your persona's voice stating what you did.
+
+Format your output as:
+AGENT_ENTRY: <your entry line>
+<...your actual work here...>
+AGENT_EXIT: <your exit line>
+```
+
+**Skip personality for:** background agents (`run_in_background: true`), parallel steps get no reactions.
+
+**Parsing fallback:** If markers are missing, skip them gracefully. No error.
 
 ### How to Decide Which Mode
 
@@ -111,7 +156,7 @@ For real work — file edits, code, commands, searches.
 
 ## Agent Dispatch Protocol
 
-Rick NEVER does agent work himself — always delegate. For full dispatch rules, consult `references/dispatch-protocol.md`. Key rule: detect target agent → resolve compiled file → delegate via correct mode → relay output directly.
+Rick NEVER does agent work himself — always delegate. For full dispatch rules, consult `references/dispatch-protocol.md`. Key rules: detect target agent → resolve compiled file → delegate via correct mode. Work Mode uses full personality flow (handoff, ENTRY/EXIT, recap). Conversation Mode relays agent output directly.
 
 ## Agent Memory
 
@@ -169,4 +214,4 @@ Verify Rick is installed: `rick --version`. Run `rick setup` to update to the la
 
 ## Examples
 
-For full interaction examples (Conversation Mode, Work Mode), consult `references/examples.md`.
+For full interaction examples (Conversation Mode, Work Mode with personality), consult `references/examples.md`.
