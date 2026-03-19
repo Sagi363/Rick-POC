@@ -640,17 +640,22 @@ fn install_skill(home: &str) -> Result<WriteStatus> {
 
 /// Show permissions guidance — detect missing perms and offer options.
 fn show_permissions_guidance(non_interactive: bool) -> Result<()> {
+    let home = env::var("HOME").unwrap_or_default();
     let rick_perms = vec![
         "Bash(rick *)",
         "Bash(cd * && rick *)",
     ];
 
-    // Check if permissions are already in project-level settings
+    // Check user-level settings first, then project-level
+    let user_settings_path = format!("{}/.claude/settings.json", home);
     let cwd = env::current_dir()?;
     let project_settings_path = cwd.join(".claude").join("settings.json");
-    let existing = load_allow_permissions(&project_settings_path.to_string_lossy());
 
-    let missing: Vec<&&str> = rick_perms.iter().filter(|p| !existing.contains(&p.to_string())).collect();
+    let user_existing = load_allow_permissions(&user_settings_path);
+    let project_existing = load_allow_permissions(&project_settings_path.to_string_lossy());
+
+    let all_existing: Vec<String> = user_existing.iter().chain(project_existing.iter()).cloned().collect();
+    let missing: Vec<&&str> = rick_perms.iter().filter(|p| !all_existing.contains(&p.to_string())).collect();
 
     if missing.is_empty() {
         println!("  \x1b[32m✓\x1b[0m Permissions   Already configured");
@@ -668,6 +673,8 @@ fn show_permissions_guidance(non_interactive: bool) -> Result<()> {
         println!();
         println!("    \x1b[33mNon-interactive mode — showing JSON for manual setup:\x1b[0m");
         println!();
+        println!("    Add to \x1b[97m~/.claude/settings.json\x1b[0m:");
+        println!();
         println!("    \x1b[36m{{\x1b[0m");
         println!("    \x1b[36m  \"permissions\": {{\x1b[0m");
         println!("    \x1b[36m    \"allow\": [\x1b[0m");
@@ -683,21 +690,26 @@ fn show_permissions_guidance(non_interactive: bool) -> Result<()> {
 
     println!();
     println!("    \x1b[97mOptions:\x1b[0m");
-    println!("      [1] Add to project settings (.claude/settings.json) — recommended for teams");
-    println!("      [2] Show me the JSON so I can add it myself");
-    println!("      [3] Skip — I'll approve commands manually each time \x1b[33m(not recommended)\x1b[0m");
+    println!("      [1] Add to user settings (~/.claude/settings.json) — works in all projects");
+    println!("      [2] Add to project settings (.claude/settings.json) — this project only");
+    println!("      [3] Show me the JSON so I can add it myself");
+    println!("      [4] Skip — I'll approve commands manually each time \x1b[33m(not recommended)\x1b[0m");
     println!();
 
-    let choice = read_user_choice("    Choose [1/2/3]: ", "2");
+    let choice = read_user_choice("    Choose [1/2/3/4]: ", "1");
 
     match choice.as_str() {
         "1" => {
+            write_project_permissions(&user_settings_path, &rick_perms)?;
+            println!("    \x1b[32m✓\x1b[0m Permissions added to ~/.claude/settings.json");
+        }
+        "2" => {
             write_project_permissions(&project_settings_path.to_string_lossy(), &rick_perms)?;
             println!("    \x1b[32m✓\x1b[0m Permissions added to .claude/settings.json");
         }
-        "2" => {
+        "3" => {
             println!();
-            println!("    Add this to your .claude/settings.json or ~/.claude/settings.json:");
+            println!("    Add to \x1b[97m~/.claude/settings.json\x1b[0m (user-level, all projects):");
             println!();
             println!("    \x1b[36m{{\x1b[0m");
             println!("    \x1b[36m  \"permissions\": {{\x1b[0m");
