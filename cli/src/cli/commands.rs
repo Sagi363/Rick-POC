@@ -16,7 +16,7 @@ const SKILL_CONTENT: &str = include_str!("../../../integrations/claude-code/skil
 /// Embedded reference files for progressive disclosure.
 const REF_DISPATCH: &str = include_str!("../../../integrations/claude-code/skill/references/dispatch-protocol.md");
 const REF_MEMORY: &str = include_str!("../../../integrations/claude-code/skill/references/memory-protocol.md");
-const REF_NAG: &str = include_str!("../../../integrations/claude-code/skill/references/nag-protocol.md");
+const REF_ADVISOR: &str = include_str!("../../../integrations/claude-code/skill/references/background-advisor.md");
 const REF_TEMPLATES: &str = include_str!("../../../integrations/claude-code/skill/references/templates-protocol.md");
 const REF_EXAMPLES: &str = include_str!("../../../integrations/claude-code/skill/references/examples.md");
 
@@ -609,7 +609,7 @@ fn install_skill(home: &str) -> Result<WriteStatus> {
     let refs = [
         ("dispatch-protocol.md", REF_DISPATCH),
         ("memory-protocol.md", REF_MEMORY),
-        ("nag-protocol.md", REF_NAG),
+        ("background-advisor.md", REF_ADVISOR),
         ("templates-protocol.md", REF_TEMPLATES),
         ("examples.md", REF_EXAMPLES),
     ];

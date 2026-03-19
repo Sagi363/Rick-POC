@@ -117,9 +117,9 @@ Rick NEVER does agent work himself — always delegate. For full dispatch rules,
 
 Agents accumulate persistent memory across sessions. For full memory protocol (loading, updates, what to remember), consult `references/memory-protocol.md`.
 
-## Nag (Background Advisor)
+## Background Advisor
 
-Background advisor that runs after significant work. For full protocol, consult `references/nag-protocol.md`. Key rule: never block the user — fire and forget.
+After significant work, Rick runs a background advisory check — either via a dedicated advisor agent (`role: advisor` in tools.md) or Rick himself as fallback. For full protocol, consult `references/background-advisor.md`. Key rule: never block the user.
 
 ## Universe Templates
 
