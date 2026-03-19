@@ -22,6 +22,7 @@ pub fn print_help() {
     println!("  run <workflow> [-f] Start a workflow (--force to skip dep checks)");
     println!("  next                Continue to next workflow step");
     println!("  status              Show active workflow status");
+    println!("  update              Update Rick to the latest version (alias: self-update)");
     println!("  help                Show this help message");
     println!();
     println!("Setup options:");

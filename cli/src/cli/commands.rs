@@ -1410,3 +1410,28 @@ pub fn check() -> Result<()> {
 
     Ok(())
 }
+
+/// Self-update: re-run the install script to get the latest Rick binary, skill, and ground rules.
+const INSTALL_SCRIPT_URL: &str =
+    "https://raw.githubusercontent.com/Sagi363/rick-POC/main/install.sh";
+
+pub fn update() -> Result<()> {
+    println!("\x1b[36mRick: Checking for updates...\x1b[0m");
+    println!();
+
+    let status = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(format!("curl -fsSL {} | bash", INSTALL_SCRIPT_URL))
+        .status()
+        .map_err(|e| RickError::Io(e))?;
+
+    if status.success() {
+        println!();
+        println!("\x1b[32mRick: Update complete.\x1b[0m");
+    } else {
+        eprintln!("\x1b[31mRick: Update failed (exit code {:?}).\x1b[0m", status.code());
+        return Err(RickError::InvalidState("Update script failed".to_string()));
+    }
+
+    Ok(())
+}

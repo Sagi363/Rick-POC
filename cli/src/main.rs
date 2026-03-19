@@ -88,6 +88,7 @@ fn run() -> error::Result<()> {
         }
         "next" => commands::next()?,
         "push" => commands::push()?,
+        "update" | "self-update" => commands::update()?,
         "setup" => {
             // Parse flags: --universe <url>, --install-deps
             let universe_url = args.windows(2)
