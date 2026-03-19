@@ -48,6 +48,9 @@ When the team lead pushes an improvement — a better prompt, a new workflow ste
 
 ## Install
 
+> **Run this in your terminal — not inside Claude Code.**
+> Claude Code will refuse to execute `curl | bash` (it's a security guardrail). Open a regular terminal window and paste the command there.
+
 One line:
 
 ```bash
