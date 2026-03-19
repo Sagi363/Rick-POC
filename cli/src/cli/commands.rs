@@ -13,6 +13,13 @@ use crate::parsers::json::{self, JsonValue};
 /// Embedded SKILL.md content — compiled into the binary via include_str!().
 const SKILL_CONTENT: &str = include_str!("../../../integrations/claude-code/skill/SKILL.md");
 
+/// Embedded reference files for progressive disclosure.
+const REF_DISPATCH: &str = include_str!("../../../integrations/claude-code/skill/references/dispatch-protocol.md");
+const REF_MEMORY: &str = include_str!("../../../integrations/claude-code/skill/references/memory-protocol.md");
+const REF_NAG: &str = include_str!("../../../integrations/claude-code/skill/references/nag-protocol.md");
+const REF_TEMPLATES: &str = include_str!("../../../integrations/claude-code/skill/references/templates-protocol.md");
+const REF_EXAMPLES: &str = include_str!("../../../integrations/claude-code/skill/references/examples.md");
+
 /// URL for the ground rules file on the main branch.
 const GROUND_RULES_URL: &str = "https://raw.githubusercontent.com/Sagi363/Rick-POC/main/ground-rules.md";
 
@@ -591,11 +598,29 @@ fn write_if_new(path: &str, content: &str) -> Result<WriteStatus> {
 }
 
 /// Install the Rick skill to ~/.claude/skills/rick/SKILL.md and ~/.claude/skills/Rick/SKILL.md.
+/// Also installs references/ folder for progressive disclosure.
 fn install_skill(home: &str) -> Result<WriteStatus> {
     let lowercase_path = format!("{}/.claude/skills/rick/SKILL.md", home);
     let uppercase_path = format!("{}/.claude/skills/Rick/SKILL.md", home);
     let status = write_if_needed(&lowercase_path, SKILL_CONTENT)?;
     write_if_needed(&uppercase_path, SKILL_CONTENT)?;
+
+    // Install references/ for progressive disclosure
+    let refs = [
+        ("dispatch-protocol.md", REF_DISPATCH),
+        ("memory-protocol.md", REF_MEMORY),
+        ("nag-protocol.md", REF_NAG),
+        ("templates-protocol.md", REF_TEMPLATES),
+        ("examples.md", REF_EXAMPLES),
+    ];
+    for variant in &["rick", "Rick"] {
+        let refs_dir = format!("{}/.claude/skills/{}/references", home, variant);
+        std::fs::create_dir_all(&refs_dir)?;
+        for (name, content) in &refs {
+            write_if_needed(&format!("{}/{}", refs_dir, name), content)?;
+        }
+    }
+
     Ok(status)
 }
 
