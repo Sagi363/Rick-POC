@@ -718,16 +718,26 @@ fn show_permissions_guidance(non_interactive: bool) -> Result<()> {
     Ok(())
 }
 
-/// Read a single choice from the user. Falls back to `default` if stdin is not interactive.
+/// Read a single choice from the user via /dev/tty (bypasses piped stdin).
+/// Falls back to `default` if no terminal is available.
 fn read_user_choice(prompt: &str, default: &str) -> String {
-    print!("{}", prompt);
-    if io::stdout().flush().is_err() {
-        return default.to_string();
-    }
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
 
+    print!("{}", prompt);
+    let _ = io::stdout().flush();
+
+    // Open /dev/tty directly — works even when stdin is piped (curl | bash).
+    // This opens a fresh handle, avoiding any buffered leftovers from sudo etc.
+    let tty = match File::open("/dev/tty") {
+        Ok(f) => f,
+        Err(_) => return default.to_string(), // No terminal (Docker, CI)
+    };
+
+    let mut reader = BufReader::new(tty);
     let mut input = String::new();
-    match io::stdin().read_line(&mut input) {
-        Ok(0) => default.to_string(), // EOF (piped/non-interactive)
+    match reader.read_line(&mut input) {
+        Ok(0) => default.to_string(),
         Ok(_) => {
             let trimmed = input.trim();
             if trimmed.is_empty() {
