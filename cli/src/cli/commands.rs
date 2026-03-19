@@ -483,7 +483,7 @@ pub fn next() -> Result<()> {
 // ---------------------------------------------------------------------------
 
 /// Execute the `setup` command — full onboarding: skill, persona, permissions, universe, deps.
-pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
+pub fn setup(universe_url: Option<&str>, install_deps: bool, non_interactive: bool) -> Result<()> {
     let home = env::var("HOME").map_err(|_| {
         RickError::InvalidState("HOME environment variable not set".to_string())
     })?;
@@ -523,7 +523,7 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool) -> Result<()> {
 
     // Step 3: Permissions guidance
     println!();
-    show_permissions_guidance()?;
+    show_permissions_guidance(non_interactive)?;
 
     // Step 4: Clone Universe (optional)
     if let Some(url) = universe_url {
@@ -639,7 +639,7 @@ fn install_skill(home: &str) -> Result<WriteStatus> {
 }
 
 /// Show permissions guidance — detect missing perms and offer options.
-fn show_permissions_guidance() -> Result<()> {
+fn show_permissions_guidance(non_interactive: bool) -> Result<()> {
     let rick_perms = vec![
         "Bash(rick *)",
         "Bash(cd * && rick *)",
@@ -662,6 +662,25 @@ fn show_permissions_guidance() -> Result<()> {
     for p in &missing {
         println!("      \x1b[97m{}\x1b[0m  — Allows Rick CLI commands without approval prompts", p);
     }
+
+    // Non-interactive mode: show JSON and move on
+    if non_interactive {
+        println!();
+        println!("    \x1b[33mNon-interactive mode — showing JSON for manual setup:\x1b[0m");
+        println!();
+        println!("    \x1b[36m{{\x1b[0m");
+        println!("    \x1b[36m  \"permissions\": {{\x1b[0m");
+        println!("    \x1b[36m    \"allow\": [\x1b[0m");
+        for (i, p) in rick_perms.iter().enumerate() {
+            let comma = if i < rick_perms.len() - 1 { "," } else { "" };
+            println!("    \x1b[36m      \"{}\"{}\x1b[0m", p, comma);
+        }
+        println!("    \x1b[36m    ]\x1b[0m");
+        println!("    \x1b[36m  }}\x1b[0m");
+        println!("    \x1b[36m}}\x1b[0m");
+        return Ok(());
+    }
+
     println!();
     println!("    \x1b[97mOptions:\x1b[0m");
     println!("      [1] Add to project settings (.claude/settings.json) — recommended for teams");
@@ -669,7 +688,6 @@ fn show_permissions_guidance() -> Result<()> {
     println!("      [3] Skip — I'll approve commands manually each time \x1b[33m(not recommended)\x1b[0m");
     println!();
 
-    // Check if stdin is a terminal for interactive prompt
     let choice = read_user_choice("    Choose [1/2/3]: ", "2");
 
     match choice.as_str() {
