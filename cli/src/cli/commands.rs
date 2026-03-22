@@ -6,6 +6,7 @@ use crate::core::agent;
 use crate::core::deps;
 use crate::core::state::{self, WorkflowState, StepState};
 use crate::core::template::{self, TemplateType};
+use crate::core::resolver;
 use crate::core::universe::Universe;
 use crate::core::workflow;
 use crate::parsers::json::{self, JsonValue};
@@ -83,8 +84,7 @@ const DEFAULT_RULES: &str = r#"# Rick's Rules
 
 /// Execute the `list agents` command.
 pub fn list_agents() -> Result<()> {
-    let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = resolver::resolve_universe_from_cwd()?;
     let agents = agent::load_agents(&universe)?;
 
     println!("\x1b[36mRick: Agents in {}:\x1b[0m", universe.name);
@@ -102,8 +102,7 @@ pub fn list_agents() -> Result<()> {
 
 /// Execute the `list workflows` command.
 pub fn list_workflows() -> Result<()> {
-    let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = resolver::resolve_universe_from_cwd()?;
     let workflows = workflow::load_workflows(&universe)?;
 
     println!("\x1b[36mRick: Workflows in {}:\x1b[0m", universe.name);
@@ -126,10 +125,48 @@ pub fn list_workflows() -> Result<()> {
     Ok(())
 }
 
-/// Execute the `compile` command.
-pub fn compile() -> Result<()> {
+/// Execute the `list universes` command.
+pub fn list_universes() -> Result<()> {
+    let all = resolver::list_all_universes()?;
+
+    if all.is_empty() {
+        println!("\x1b[36mRick: No Universes installed.\x1b[0m");
+        println!("\x1b[90m  Run 'rick add <url>' to install one.\x1b[0m");
+        return Ok(());
+    }
+
+    println!("\x1b[36mRick: Installed Universes:\x1b[0m");
+    println!();
+
+    for (u, source) in &all {
+        let agents = agent::load_agents(u).unwrap_or_default();
+        let workflows = workflow::load_workflows(u).unwrap_or_default();
+
+        println!(
+            "\x1b[97m  {}\x1b[0m \x1b[90m({})\x1b[0m",
+            u.name, source
+        );
+        println!(
+            "\x1b[90m    v{} — {} agents, {} workflows\x1b[0m",
+            u.version, agents.len(), workflows.len()
+        );
+        if !u.description.is_empty() {
+            println!("\x1b[90m    {}\x1b[0m", u.description);
+        }
+        println!("\x1b[90m    Path: {}\x1b[0m", u.path.display());
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Execute the `compile` command. Optionally specify a universe name.
+pub fn compile(universe_name: Option<&str>) -> Result<()> {
     let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = match universe_name {
+        Some(name) => resolver::resolve_universe(name)?,
+        None => resolver::resolve_universe_from_cwd()?,
+    };
     let agents = agent::load_agents(&universe)?;
 
     println!(
@@ -141,7 +178,7 @@ pub fn compile() -> Result<()> {
     let mut compiled_paths = Vec::new();
 
     for a in &agents {
-        let path = a.compile(&universe.name, &output_dir)?;
+        let path = a.compile(&universe.name, &output_dir, &universe.path)?;
         compiled_paths.push(path);
     }
 
@@ -170,7 +207,7 @@ pub fn compile() -> Result<()> {
     }
 
     // Template hint (informational only)
-    if let Ok(templates) = template::detect_templates(&cwd) {
+    if let Ok(templates) = template::detect_templates(&universe.path) {
         if !templates.is_empty() {
             println!("\x1b[90m  Tip: This Universe has templates in .rick/templates/\x1b[0m");
         }
@@ -181,8 +218,7 @@ pub fn compile() -> Result<()> {
 
 /// Execute the `run <workflow>` command.
 pub fn run(workflow_name: &str, force: bool) -> Result<()> {
-    let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = resolver::resolve_universe_from_cwd()?;
     let workflows = workflow::load_workflows(&universe)?;
 
     let wf = workflows
@@ -240,7 +276,7 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
         steps,
     };
 
-    let state_dir = cwd.join(".rick").join("state");
+    let state_dir = resolver::global_state_dir()?;
     state.save(&state_dir)?;
 
     println!(
@@ -280,8 +316,7 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
 
 /// Execute the `status` command.
 pub fn status() -> Result<()> {
-    let cwd = env::current_dir()?;
-    let state_dir = cwd.join(".rick").join("state");
+    let state_dir = resolver::global_state_dir()?;
     let states = state::load_all_states(&state_dir)?;
 
     if states.is_empty() {
@@ -313,12 +348,9 @@ pub fn status() -> Result<()> {
     Ok(())
 }
 
-/// Execute the `init` command.
+/// Execute the `init` command — create a new Universe in cwd (for authoring).
 pub fn init() -> Result<()> {
     let cwd = env::current_dir()?;
-    let universes_dir = cwd.join("universes");
-    std::fs::create_dir_all(&universes_dir)?;
-
     let rick_dir = cwd.join(".rick");
 
     if rick_dir.exists() {
@@ -346,14 +378,13 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
         base.trim_end_matches(".git").to_string()
     });
 
-    let cwd = env::current_dir()?;
-    let universes_dir = cwd.join("universes");
+    let universes_dir = resolver::global_universes_dir()?;
     std::fs::create_dir_all(&universes_dir)?;
     let target = universes_dir.join(&name);
 
     if target.exists() {
         return Err(RickError::InvalidState(format!(
-            "Universe '{}' already exists in universes/",
+            "Universe '{}' already exists in ~/.rick/universes/",
             name
         )));
     }
@@ -416,14 +447,15 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
         println!("\x1b[90m  Workflows: {}\x1b[0m", names.join(", "));
     }
 
-    // Auto-compile agents
+    // Auto-compile agents to project-local .claude/agents/
     println!();
     println!("\x1b[36mRick: Compiling agents...\x1b[0m");
 
-    let output_dir = target.join(".claude").join("agents");
+    let cwd = env::current_dir()?;
+    let output_dir = cwd.join(".claude").join("agents");
     let mut compiled_count = 0;
     for a in &agents {
-        a.compile(&universe.name, &output_dir)?;
+        a.compile(&universe.name, &output_dir, &universe.path)?;
         compiled_count += 1;
     }
 
@@ -435,18 +467,14 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
 
     println!();
     println!("\x1b[36mRick: Universe '{}' is ready!\x1b[0m", name);
-    println!(
-        "\x1b[97m  cd universes/{} && rick list workflows\x1b[0m",
-        name
-    );
+    println!("\x1b[97m  rick list workflows\x1b[0m");
 
     Ok(())
 }
 
 /// Execute the `next` command.
 pub fn next() -> Result<()> {
-    let cwd = env::current_dir()?;
-    let state_dir = cwd.join(".rick").join("state");
+    let state_dir = resolver::global_state_dir()?;
     let states = state::load_all_states(&state_dir)?;
 
     if states.is_empty() {
@@ -1043,8 +1071,7 @@ fn extract_json_string(json: &str, key: &str) -> Option<String> {
 
 /// Install MCP dependencies declared by agents in the current Universe.
 fn install_agent_deps() -> Result<()> {
-    let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = resolver::resolve_universe_from_cwd()?;
     let agents = agent::load_agents(&universe)?;
 
     let agent_deps: Vec<(String, &agent::AgentDependencies)> = agents
@@ -1094,8 +1121,7 @@ fn install_agent_deps() -> Result<()> {
 
 /// Execute the `invite` command — generate a shareable install command for the current Universe.
 pub fn invite(emails: &[&str]) -> Result<()> {
-    let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = resolver::resolve_universe_from_cwd()?;
     let agents = agent::load_agents(&universe)?;
     let workflows = workflow::load_workflows(&universe)?;
 
@@ -1210,9 +1236,10 @@ fn extract_gh_repo(url: &str) -> Option<String> {
 }
 
 /// Execute the `push` command — commit and push Universe changes, then recompile.
+/// Note: push operates ON the universe repo, so cwd must be inside a Universe.
 pub fn push() -> Result<()> {
     let cwd = env::current_dir()?;
-    let _universe = Universe::load(&cwd)?;
+    let _universe = Universe::load(&cwd).or_else(|_| resolver::resolve_universe_from_cwd())?;
 
     // Check for uncommitted changes in agents/ and workflows/
     let status_output = std::process::Command::new("git")
@@ -1428,8 +1455,7 @@ pub fn push() -> Result<()> {
 
 /// Execute the `check` command — verify all agent dependencies are satisfied.
 pub fn check() -> Result<()> {
-    let cwd = env::current_dir()?;
-    let universe = Universe::load(&cwd)?;
+    let universe = resolver::resolve_universe_from_cwd()?;
     let agents = agent::load_agents(&universe)?;
 
     println!(
