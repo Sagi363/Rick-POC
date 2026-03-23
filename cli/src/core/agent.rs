@@ -134,7 +134,7 @@ impl Agent {
     }
 
     /// Compile this agent into a Claude Code sub-agent markdown file.
-    pub fn compile(&self, universe_name: &str, output_dir: &Path) -> Result<PathBuf> {
+    pub fn compile(&self, universe_name: &str, output_dir: &Path, universe_path: &Path) -> Result<PathBuf> {
         fs::create_dir_all(output_dir)?;
 
         let filename = format!("rick-{}-{}.md", universe_name, self.name);
@@ -175,11 +175,12 @@ impl Agent {
 
         // Memory write-back instructions
         content.push_str("\n## Memory Management\n\n");
+        let memory_path = universe_path.join("agents").join(&self.name).join("Memory.md");
         content.push_str(&format!(
-            "You have a persistent memory file at `agents/{}/Memory.md` in the Universe directory.\n\
+            "You have a persistent memory file at `{}`.\n\
             When you learn something worth remembering across sessions (user preferences, architectural decisions, recurring patterns, what worked or didn't), append it to your Memory.md file.\n\
             Keep entries concise — one line per learning, grouped by topic. Do NOT remove existing entries.\n",
-            self.name
+            memory_path.display()
         ));
 
         fs::write(&output_path, &content)?;

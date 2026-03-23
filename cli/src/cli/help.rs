@@ -13,12 +13,13 @@ pub fn print_help() {
     println!("  setup [options]     Onboarding wizard: install skill, persona, permissions, auto-update");
     println!("  add <url> [-n name] Clone an existing Universe and compile its agents");
     println!("  init                Initialize a new Rick universe");
-    println!("  compile             Compile agents to Claude Code sub-agents");
+    println!("  compile [name]      Compile agents to Claude Code sub-agents");
     println!("  check               Verify all agent dependencies (MCPs, skills)");
     println!("  push                Commit and push Universe changes, then recompile");
     println!("  invite [users...]   Invite GitHub users as collaborators + show install link");
     println!("  list agents         List all agents in the universe");
     println!("  list workflows      List all workflows in the universe");
+    println!("  list universes      List all installed universes");
     println!("  run <workflow> [-f] Start a workflow (--force to skip dep checks)");
     println!("  next                Continue to next workflow step");
     println!("  status              Show active workflow status");

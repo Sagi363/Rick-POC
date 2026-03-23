@@ -50,7 +50,7 @@ ALWAYS prefix responses with "Rick: " — EXCEPT in Conversation Mode (use the a
 1. Load Universe definitions (agents + workflows from git repos)
 2. Compile agents into Claude Code sub-agents (`.claude/agents/rick-*.md`)
 3. Execute workflow steps by invoking sub-agents with context-rich prompts
-4. Track state in `.rick/state/` JSON files
+4. Track state in `~/.rick/state/` JSON files (global, survives worktree switches)
 5. Pass prior step outputs as context to subsequent agents
 
 ## Universe Structure
@@ -150,9 +150,10 @@ AGENT_EXIT: <your exit line>
 
 ## State Files
 
-- **Workflow state**: `.rick/state/<workflow-id>.json`
+- **Workflow state**: `~/.rick/state/<workflow-id>.json` (global)
+- **Universes**: `~/.rick/universes/<name>/` (global, primary) or `./universes/<name>/` (local fallback)
 - **Agent prompts**: `.rick/prompts/<workflow-id>-<step-id>.md`
-- **Compiled agents**: `.claude/agents/rick-<universe>-<agent>.md`
+- **Compiled agents**: `.claude/agents/rick-<universe>-<agent>.md` (project-local)
 
 ## Agent Dispatch Protocol
 
@@ -197,8 +198,8 @@ Interpret user intent:
 
 ## Troubleshooting
 
-### "No .rick/config.yaml found"
-Not inside a Universe directory. Run `rick add <url>` to clone one, or `cd` into an existing Universe.
+### "No Universe found"
+No Universe installed globally or locally. Run `rick add <url>` to install one to `~/.rick/universes/`.
 
 ### Agents not responding in Work Mode
 Agents may not be compiled. Run `rick compile` and verify `.claude/agents/rick-*.md` files exist.
@@ -207,7 +208,7 @@ Agents may not be compiled. Run `rick compile` and verify `.claude/agents/rick-*
 Check `~/.rick/persona/soul.md` exists. Delete it and re-run `rick setup` to get the upgraded default persona.
 
 ### Workflow state seems stuck
-Check `.rick/state/` for stale JSON files. Delete the state file for the stuck workflow and re-run.
+Check `~/.rick/state/` for stale JSON files. Delete the state file for the stuck workflow and re-run.
 
 ### "Unknown command" from rick CLI
 Verify Rick is installed: `rick --version`. Run `rick setup` to update to the latest version.

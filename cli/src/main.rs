@@ -27,7 +27,7 @@ fn run() -> error::Result<()> {
         }
         "list" => {
             if args.len() < 2 {
-                eprintln!("\x1b[31mRick: Missing argument. Use 'list agents' or 'list workflows'.\x1b[0m");
+                eprintln!("\x1b[31mRick: Missing argument. Use 'list agents', 'list workflows', or 'list universes'.\x1b[0m");
                 return Err(RickError::InvalidState(
                     "Missing list subcommand".to_string(),
                 ));
@@ -35,9 +35,10 @@ fn run() -> error::Result<()> {
             match args[1].as_str() {
                 "agents" => commands::list_agents()?,
                 "workflows" => commands::list_workflows()?,
+                "universes" => commands::list_universes()?,
                 other => {
                     eprintln!(
-                        "\x1b[31mRick: Unknown list target '{}'. Use 'agents' or 'workflows'.\x1b[0m",
+                        "\x1b[31mRick: Unknown list target '{}'. Use 'agents', 'workflows', or 'universes'.\x1b[0m",
                         other
                     );
                     return Err(RickError::InvalidState(format!(
@@ -47,7 +48,10 @@ fn run() -> error::Result<()> {
                 }
             }
         }
-        "compile" => commands::compile()?,
+        "compile" => {
+            let name = args.get(1).map(|s| s.as_str());
+            commands::compile(name)?;
+        }
         "run" => {
             let force = args.iter().any(|a| a == "--force" || a == "-f");
             let wf_name = args[1..].iter()
