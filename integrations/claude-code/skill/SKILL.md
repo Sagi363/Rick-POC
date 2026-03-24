@@ -77,12 +77,17 @@ For real work — file edits, code, commands, searches. This flow applies to BOT
 
 1. **Identify agent** — From workflow step OR user request (via Dispatch Protocol)
 2. **Read persona** — Read the agent's compiled file (`.claude/agents/rick-*.md`)
-3. **HANDOFF** — Print a one-liner in Rick's voice (max 20 words) referencing the agent's personality AND the task
+3. **HANDOFF** — Print a one-liner in Rick's voice (max 20 words) referencing the agent's personality AND the task. Format: `**Rick:** <line>` (name bold, text regular)
 4. **Build agent prompt** — Combine the user's task with personality instructions (see Agent Personality below). Prepend the personality template to the task prompt.
 5. **Invoke agent** — Via the Agent tool with the compiled agent file
-6. **Parse output** — Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output. Strip the marker prefixes — only keep the content after the colon.
-7. **Display** — Show the entry content in italics, then the agent's work output, then the exit content in italics. Never display the raw `AGENT_ENTRY:` or `AGENT_EXIT:` labels to the user.
-8. **RECAP** — Print a one-liner in Rick's voice (max 20 words) about what happened
+6. **Parse output** — Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output. Strip the marker prefixes — only keep the content after the colon. If the agent prefixed their work output with their own name+role (e.g., "Neo (Architect):"), strip that too — you'll add it once.
+7. **Display** — Print all agent lines as one tight block. Agent name is **bold**, agent content is *italic*:
+   - First line: `**<AgentName> (<Role>):** *<entry content>*`
+   - Next lines: `*<work output>*` (no name prefix — still the same agent)
+   - Last line: `*<exit content>*` (no name prefix)
+   - No blank lines between these — one continuous block from one speaker.
+   - Never display the raw `AGENT_ENTRY:` or `AGENT_EXIT:` labels.
+8. **RECAP** — Add a blank line, then print `**Rick:** <one-liner>` (name bold, text regular, max 20 words). The blank line visually separates Rick from the agent block.
 
 #### Additional steps for workflow execution only
 
