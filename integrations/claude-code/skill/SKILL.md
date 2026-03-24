@@ -71,19 +71,32 @@ For talking — introductions, Q&A, explanations, opinions. No file edits or too
 
 ### Work Mode (Tools needed)
 
-For real work — file edits, code, commands, searches.
+For real work — file edits, code, commands, searches. This flow applies to BOTH workflow steps AND ad-hoc tasks (direct agent requests outside a workflow).
 
-1. Get state: `rick status` to identify current step and agent
-2. Prepare step: `rick next <workflow-id>` to generate agent prompt
-3. Read the agent's compiled persona (already in `.claude/agents/rick-*.md`)
-4. **HANDOFF**: Print a one-liner in Rick's voice (max 20 words) referencing the agent's personality AND the task.
-5. Read prompt from `.rick/prompts/<wf-id>-<step-id>.md`
-6. **Build agent prompt**: Prepend personality instructions (see Agent Personality below)
-7. Invoke agent via the Agent tool
-8. **Parse output**: Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output
-9. **Display**: Show AGENT_ENTRY line → agent's work output → AGENT_EXIT line
-10. **RECAP**: Print a one-liner in Rick's voice (max 20 words) about what happened. Tease next agent if there is one.
-11. Parse `RICK_STEP_COMPLETE:` and update state
+#### Core Flow (always applies)
+
+1. **Identify agent** — From workflow step OR user request (via Dispatch Protocol)
+2. **Read persona** — Read the agent's compiled file (`.claude/agents/rick-*.md`)
+3. **HANDOFF** — Print a one-liner in Rick's voice (max 20 words) referencing the agent's personality AND the task
+4. **Build agent prompt** — Combine the user's task with personality instructions (see Agent Personality below). Prepend the personality template to the task prompt.
+5. **Invoke agent** — Via the Agent tool with the compiled agent file
+6. **Parse output** — Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output
+7. **Display** — Show AGENT_ENTRY line → agent's work output → AGENT_EXIT line
+8. **RECAP** — Print a one-liner in Rick's voice (max 20 words) about what happened
+
+#### Additional steps for workflow execution only
+
+- **Before step 1**: Get state via `rick status`, advance via `rick next`
+- **Before step 4**: Read workflow prompt from `.rick/prompts/<wf-id>-<step-id>.md`
+- **After step 8**: Parse `RICK_STEP_COMPLETE:` and update state. Tease next agent if there is one.
+
+#### Ad-hoc tasks (no workflow)
+
+When the user asks an agent to do something outside a workflow (e.g., "have Sherlock find X", "ask Neo to plan Y"):
+- Skip all workflow state/prompt steps — go straight to the core flow
+- The user's request IS the task prompt — no `.rick/prompts/` file needed
+- Always use the "no previous step" personality template (no prior agent to react to)
+- No state to update afterward
 
 **Rules:**
 - Handoff and recap: **max 20 words each.** Never a paragraph.

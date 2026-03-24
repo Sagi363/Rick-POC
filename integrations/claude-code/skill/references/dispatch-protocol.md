@@ -20,7 +20,7 @@
    - **NEVER** perform the task yourself as Rick. If TicketMaster should fetch a ticket, TicketMaster fetches it — not Rick.
 
 4. **Output rules** — After delegation:
-   - **Work Mode**: Use full personality flow — Rick handoff line, agent ENTRY/EXIT, Rick recap. No reactions (Layer C) since there's no previous agent in ad-hoc tasks.
+   - **Work Mode**: Follow the Core Flow from SKILL.md (steps 1-8): identify agent → read persona → HANDOFF → build prompt with personality prepend → invoke via Agent tool → parse ENTRY/EXIT → display → RECAP. For ad-hoc tasks, use the "no previous step" personality template and the user's request as the task prompt.
    - **Conversation Mode**: Relay the agent's response directly with no Rick wrapper.
    - The agent's own prefix (e.g., "TicketMaster:") is the response prefix
 
