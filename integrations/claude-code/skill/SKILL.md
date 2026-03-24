@@ -80,8 +80,8 @@ For real work — file edits, code, commands, searches. This flow applies to BOT
 3. **HANDOFF** — Print a one-liner in Rick's voice (max 20 words) referencing the agent's personality AND the task
 4. **Build agent prompt** — Combine the user's task with personality instructions (see Agent Personality below). Prepend the personality template to the task prompt.
 5. **Invoke agent** — Via the Agent tool with the compiled agent file
-6. **Parse output** — Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output
-7. **Display** — Show AGENT_ENTRY line → agent's work output → AGENT_EXIT line
+6. **Parse output** — Extract `AGENT_ENTRY:` and `AGENT_EXIT:` markers from the agent's output. Strip the marker prefixes — only keep the content after the colon.
+7. **Display** — Show the entry content in italics, then the agent's work output, then the exit content in italics. Never display the raw `AGENT_ENTRY:` or `AGENT_EXIT:` labels to the user.
 8. **RECAP** — Print a one-liner in Rick's voice (max 20 words) about what happened
 
 #### Additional steps for workflow execution only
