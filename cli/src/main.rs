@@ -91,6 +91,10 @@ fn run() -> error::Result<()> {
             commands::add(&args[1], custom_name)?;
         }
         "next" => commands::next()?,
+        "pull" | "update" => {
+            let name = args.get(1).map(|s| s.as_str());
+            commands::pull(name)?;
+        }
         "push" => commands::push()?,
         "setup" => {
             // Parse flags: --universe <url>, --install-deps, --non-interactive

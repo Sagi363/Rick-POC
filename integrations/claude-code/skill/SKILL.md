@@ -1,6 +1,6 @@
 ---
 name: rick
-description: "Multi-agent workflow orchestration across Universes. Use when user says '/rick run', '/rick list', '/rick next', '/rick status', '/rick add', '/rick compile', '/rick push', '/rick invite', '/rick setup', 'run workflow', 'list agents', 'start feature', 'show workflows', 'add universe', or asks to orchestrate multi-agent tasks, manage Universes, or coordinate AI agent teams."
+description: "Multi-agent workflow orchestration across Universes. Use when user says '/rick run', '/rick list', '/rick next', '/rick status', '/rick add', '/rick compile', '/rick push', '/rick pull', '/rick update', '/rick invite', '/rick setup', 'run workflow', 'list agents', 'start feature', 'show workflows', 'add universe', 'pull universe', 'update universe', 'sync universe', 'update agents', or asks to orchestrate multi-agent tasks, manage Universes, or coordinate AI agent teams."
 mode: user-invoked
 license: MIT
 compatibility: "Requires Claude Code CLI. Uses Bash, Agent tool, and file system tools (Read, Write, Edit, Grep, Glob)."
@@ -18,7 +18,7 @@ args:
     required: false
 metadata:
   author: SagiHatzabi
-  version: 0.7.4
+  version: 0.8.0
   category: workflow-orchestration
   tags: [multi-agent, workflows, universes, orchestration]
 ---
@@ -160,11 +160,52 @@ AGENT_EXIT: <your exit line>
 ## Available Commands
 
 - `/rick add <url> [-n name]` — Clone a Universe, validate, auto-compile agents
+- `/rick pull [universe-name]` — Pull latest from remote, recompile agents (alias: `update`)
+- `/rick update [universe-name]` — Alias for `rick pull`
 - `/rick list [workflows|agents|universes]` — Show available resources
 - `/rick run <workflow> [--params='{}']` — Start a workflow (show plan, confirm, execute)
 - `/rick next` — Execute next workflow step (Work Mode)
 - `/rick status` — Show workflow progress
 - `/rick invite [github-usernames...]` — Invite collaborators, show install links
+
+### Pull / Update Protocol
+
+When `/rick pull [universe-name]` or `/rick update [universe-name]` is invoked:
+
+1. **Resolve Universe path**
+   - Check `~/.rick/universes/<name>/` (global, primary)
+   - Fallback: `./universes/<name>/` (local)
+   - No args → pull ALL installed Universes
+   - Not found → error: "Universe '<name>' not installed. Run `rick add <url>`"
+
+2. **Pre-pull safety checks**
+   - `cd` into Universe path
+   - Run `git status` — check for uncommitted changes
+   - If dirty → WARN and ask user: "Universe '<name>' has uncommitted changes. Stash and pull? [y/n]"
+     - y → `git stash`, continue
+     - n → skip this Universe (continue to next if pulling all)
+
+3. **Pull from remote**
+   - Detect default branch: `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'`
+   - `git pull origin <default-branch>`
+   - On conflict → report conflicting files, skip Universe
+   - On success → continue
+
+4. **Post-pull recompile** (critical — not just a git pull)
+   - Re-run compile logic: regenerate `.claude/agents/rick-<universe>-<agent>.md` files
+   - Detect new agents → report them
+   - Detect removed agents → delete stale compiled files, report
+   - Detect new/changed workflows → report them
+
+5. **Report**
+   - For single Universe: git summary + agents recompiled + changes detected
+   - For all Universes (no args): summary table:
+
+   | Universe | Status | Changes |
+   |----------|--------|---------|
+   | my-team  | Updated | 2 agents recompiled, 1 new workflow |
+   | side-proj| Up to date | — |
+   | experiment| Skipped | Uncommitted changes |
 
 ## State Files
 
@@ -206,6 +247,9 @@ If a step fails:
 
 Interpret user intent:
 - "add this universe <url>" → `rick add <url>`
+- "pull universe" / "update universe" / "sync universe" → `rick pull`
+- "get latest agents" / "refresh agents" → `rick pull`
+- "pull <name>" / "update <name>" → `rick pull <name>`
 - "create a feature for X" → find matching workflow, start it
 - "what can you do?" → list workflows and agents
 - "continue" / "next" / "go" → execute next step
@@ -227,6 +271,12 @@ Check `~/.rick/persona/soul.md` exists. Delete it and re-run `rick setup` to get
 
 ### Workflow state seems stuck
 Check `~/.rick/state/` for stale JSON files. Delete the state file for the stuck workflow and re-run.
+
+### Pull fails with merge conflicts
+Run `git -C ~/.rick/universes/<name> status` to see conflicting files. Resolve manually, then re-run `rick pull <name>`.
+
+### Pull reports "no remote configured"
+The Universe directory may have been created manually instead of cloned. Remove it and re-add with `rick add <url>`.
 
 ### "Unknown command" from rick CLI
 Verify Rick is installed: `rick --version`. Run `rick setup` to update to the latest version.

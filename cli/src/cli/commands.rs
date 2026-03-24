@@ -472,6 +472,207 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Execute the `pull` / `update` command — pull latest changes from remote and recompile.
+pub fn pull(universe_name: Option<&str>) -> Result<()> {
+    let cwd = env::current_dir()?;
+
+    // If no name given, pull ALL installed universes
+    let universes_to_pull: Vec<(Universe, String)> = if let Some(name) = universe_name {
+        let u = resolver::resolve_universe(name)?;
+        vec![(u, "global".to_string())]
+    } else {
+        let all = resolver::list_all_universes()?;
+        if all.is_empty() {
+            println!("\x1b[33mRick: No Universes installed. Run 'rick add <url>' first.\x1b[0m");
+            return Ok(());
+        }
+        all
+    };
+
+    let multiple = universes_to_pull.len() > 1;
+    let mut summary: Vec<(String, &str, String)> = Vec::new(); // (name, status, details)
+
+    for (universe, _source) in &universes_to_pull {
+        let uni_path = &universe.path;
+        let uni_name = &universe.name;
+
+        if multiple {
+            println!("\x1b[36mRick: Pulling {}...\x1b[0m", uni_name);
+        } else {
+            println!("\x1b[36mRick: Pulling Universe '{}'...\x1b[0m", uni_name);
+        }
+
+        // Step 2: Pre-pull safety check
+        let status_output = std::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(uni_path)
+            .output()
+            .map_err(|e| RickError::Io(e))?;
+
+        let changes = String::from_utf8_lossy(&status_output.stdout);
+        if !changes.trim().is_empty() {
+            println!("\x1b[33m  Warning: '{}' has uncommitted changes. Skipping.\x1b[0m", uni_name);
+            println!("\x1b[90m  Resolve changes manually, then re-run 'rick pull {}'.\x1b[0m", uni_name);
+            summary.push((uni_name.clone(), "Skipped", "Uncommitted changes".to_string()));
+            continue;
+        }
+
+        // Step 3: Detect default branch
+        let branch_output = std::process::Command::new("git")
+            .args(["symbolic-ref", "refs/remotes/origin/HEAD"])
+            .current_dir(uni_path)
+            .output();
+
+        let default_branch = match branch_output {
+            Ok(ref out) if out.status.success() => {
+                let raw = String::from_utf8_lossy(&out.stdout);
+                raw.trim().replace("refs/remotes/origin/", "")
+            }
+            _ => {
+                // Fallback: try git remote show origin
+                let show_output = std::process::Command::new("git")
+                    .args(["remote", "show", "origin"])
+                    .current_dir(uni_path)
+                    .output();
+                match show_output {
+                    Ok(ref out) if out.status.success() => {
+                        let text = String::from_utf8_lossy(&out.stdout);
+                        text.lines()
+                            .find(|l| l.contains("HEAD branch"))
+                            .and_then(|l| l.split_whitespace().last())
+                            .unwrap_or("main")
+                            .to_string()
+                    }
+                    _ => "main".to_string(),
+                }
+            }
+        };
+
+        // Step 3b: Pull
+        let pull_output = std::process::Command::new("git")
+            .args(["pull", "origin", &default_branch])
+            .current_dir(uni_path)
+            .output()
+            .map_err(|e| RickError::Io(e))?;
+
+        if !pull_output.status.success() {
+            let stderr = String::from_utf8_lossy(&pull_output.stderr);
+            if stderr.contains("CONFLICT") || stderr.contains("Merge conflict") {
+                println!("\x1b[31m  Merge conflict in '{}'. Resolve manually.\x1b[0m", uni_name);
+                summary.push((uni_name.clone(), "Conflict", "Merge conflict".to_string()));
+            } else {
+                println!("\x1b[31m  Pull failed for '{}': {}\x1b[0m", uni_name, stderr.trim());
+                summary.push((uni_name.clone(), "Failed", stderr.trim().to_string()));
+            }
+            continue;
+        }
+
+        let pull_msg = String::from_utf8_lossy(&pull_output.stdout);
+        let up_to_date = pull_msg.contains("Already up to date") || pull_msg.contains("Already up-to-date");
+
+        // Step 4: Post-pull — detect agent changes and recompile
+        let agents_before: Vec<String> = std::fs::read_dir(cwd.join(".claude").join("agents"))
+            .ok()
+            .map(|entries| {
+                entries.flatten()
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        if name.starts_with(&format!("rick-{}-", uni_name)) && name.ends_with(".md") {
+                            Some(name.trim_start_matches(&format!("rick-{}-", uni_name))
+                                .trim_end_matches(".md").to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let agents_after: Vec<String> = agent::load_agents(&universe)
+            .unwrap_or_default()
+            .iter()
+            .map(|a| a.name.clone())
+            .collect();
+
+        // Detect new and removed
+        let new_agents: Vec<&String> = agents_after.iter()
+            .filter(|a| !agents_before.contains(a))
+            .collect();
+        let removed_agents: Vec<&String> = agents_before.iter()
+            .filter(|a| !agents_after.contains(a))
+            .collect();
+
+        // Delete stale compiled files for removed agents
+        for removed in &removed_agents {
+            let stale = cwd.join(".claude").join("agents")
+                .join(format!("rick-{}-{}.md", uni_name, removed));
+            let _ = std::fs::remove_file(&stale);
+        }
+
+        // Recompile all current agents
+        let output_dir = cwd.join(".claude").join("agents");
+        std::fs::create_dir_all(&output_dir)?;
+        let agents = agent::load_agents(&universe).unwrap_or_default();
+        let mut compiled_count = 0;
+        for a in &agents {
+            a.compile(&universe.name, &output_dir, &universe.path)?;
+            compiled_count += 1;
+        }
+
+        // Build details string
+        let mut details = Vec::new();
+        details.push(format!("{} agents recompiled", compiled_count));
+        if !new_agents.is_empty() {
+            details.push(format!("{} new ({})", new_agents.len(),
+                new_agents.iter().map(|a| a.as_str()).collect::<Vec<_>>().join(", ")));
+        }
+        if !removed_agents.is_empty() {
+            details.push(format!("{} removed ({})", removed_agents.len(),
+                removed_agents.iter().map(|a| a.as_str()).collect::<Vec<_>>().join(", ")));
+        }
+
+        let status_label = if up_to_date { "Up to date" } else { "Updated" };
+
+        if !multiple {
+            // Single universe — detailed output
+            println!("  \x1b[32m✓\x1b[0m Status: {}", status_label);
+            println!("  \x1b[32m✓\x1b[0m {}", details.join(", "));
+            if !new_agents.is_empty() {
+                for a in &new_agents {
+                    println!("  \x1b[36m+\x1b[0m New agent: \x1b[97m{}\x1b[0m", a);
+                }
+            }
+            if !removed_agents.is_empty() {
+                for a in &removed_agents {
+                    println!("  \x1b[31m-\x1b[0m Removed agent: \x1b[97m{}\x1b[0m", a);
+                }
+            }
+        }
+
+        summary.push((uni_name.clone(), status_label, details.join(", ")));
+    }
+
+    // Multi-universe summary table
+    if multiple {
+        println!();
+        println!("\x1b[36mRick: Pull Summary:\x1b[0m");
+        println!();
+        println!("  \x1b[97m{:<24} {:<14} {}\x1b[0m", "Universe", "Status", "Changes");
+        println!("  {}", "-".repeat(70));
+        for (name, status, details) in &summary {
+            let icon = match *status {
+                "Updated" => "\x1b[32m✓\x1b[0m",
+                "Up to date" => "\x1b[32m✓\x1b[0m",
+                "Skipped" => "\x1b[33m!\x1b[0m",
+                _ => "\x1b[31m✗\x1b[0m",
+            };
+            println!("  {} {:<24} {:<14} {}", icon, name, status, details);
+        }
+    }
+
+    Ok(())
+}
+
 /// Execute the `next` command.
 pub fn next() -> Result<()> {
     let state_dir = resolver::global_state_dir()?;
