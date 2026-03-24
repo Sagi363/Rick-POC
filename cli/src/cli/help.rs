@@ -15,6 +15,8 @@ pub fn print_help() {
     println!("  init                Initialize a new Rick universe");
     println!("  compile [name]      Compile agents to Claude Code sub-agents");
     println!("  check               Verify all agent dependencies (MCPs, skills)");
+    println!("  pull [name]         Pull latest from remote and recompile agents");
+    println!("  update [name]       Alias for pull");
     println!("  push                Commit and push Universe changes, then recompile");
     println!("  invite [users...]   Invite GitHub users as collaborators + show install link");
     println!("  list agents         List all agents in the universe");
