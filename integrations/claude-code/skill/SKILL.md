@@ -18,7 +18,7 @@ args:
     required: false
 metadata:
   author: SagiHatzabi
-  version: 0.7.4
+  version: 0.8.0
   category: workflow-orchestration
   tags: [multi-agent, workflows, universes, orchestration]
 ---
