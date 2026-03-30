@@ -12,13 +12,17 @@ allowed-tools:
   - Grep
   - Glob
   - Agent
+  - TaskCreate
+  - TaskUpdate
+  - TaskList
+  - TaskGet
 args:
   - name: command
     description: "Action: list, run, next, status, or a natural language request"
     required: false
 metadata:
   author: SagiHatzabi
-  version: 0.8.0
+  version: 0.9.0
   category: workflow-orchestration
   tags: [multi-agent, workflows, universes, orchestration]
 ---
@@ -56,6 +60,22 @@ ALWAYS prefix responses with "Rick: " — EXCEPT in Conversation Mode (use the a
 ## Universe Structure
 
 A Universe is a git repo with `agents/`, `skills/`, and `workflows/` folders. Agents have soul.md + rules.md + tools.md + Memory.md. Skills are reusable capability definitions consumed by agents (organized by context in subfolders). Workflows are YAML step sequences.
+
+## Workflow Composition
+
+Workflows can embed other workflows using the `uses` keyword. This is the preferred pattern
+for building complex pipelines from smaller, reusable workflows.
+
+- `uses: <workflow-name>` — Embed another workflow as a phase
+- Child steps are flattened inline with prefixed IDs: `<phase-id>.<child-step-id>`
+- Parameters passed via `params:` — supports `{{parent_param}}` and `{{step_outputs.phase.step}}`
+- Output flows between phases automatically — each phase receives prior phase context
+- Max nesting depth: 1 (a child workflow cannot itself contain `uses`)
+
+For full composition semantics, consult `references/composition-protocol.md`.
+
+**When creating new workflows:** Before duplicating steps from an existing workflow,
+check if `uses` can compose them instead. One improvement, all pipelines benefit.
 
 ## Agent Invocation: Two-Mode System
 
@@ -229,6 +249,41 @@ After significant work, Rick runs a background advisory check — either via a d
 ## Universe Templates
 
 Soft guidelines in `.rick/templates/` that guide agent/workflow creation. For full detection and enforcement rules, consult `references/templates-protocol.md`.
+
+## Workflow Progress Tracking (MANDATORY)
+
+When executing a workflow, you MUST use `TaskCreate` and `TaskUpdate` to give the user a visual progress tracker. This is not optional — every workflow execution must show task progress.
+
+### On `/rick run` (workflow start)
+
+Create one task per step (flat workflows) or one task per phase (composed workflows) **before executing anything**:
+
+**Flat workflow example** (3 steps):
+```
+TaskCreate(subject="Step 1: Sherlock — Investigate the bug", description="...", activeForm="Sherlock investigating the bug")
+TaskCreate(subject="Step 2: Trinity — Implement the fix", description="...", activeForm="Trinity implementing the fix")
+TaskCreate(subject="Step 3: Reviewer — Code review", description="...", activeForm="Reviewer reviewing the code")
+```
+
+**Composed workflow example** (3 phases):
+```
+TaskCreate(subject="Phase 1: gather (gather-info)", description="Research the topic", activeForm="Phase 1: Researching the topic")
+TaskCreate(subject="Phase 2: process (process-data)", description="Analyze findings", activeForm="Phase 2: Analyzing findings")
+TaskCreate(subject="Phase 3: report (generate-report)", description="Write the report", activeForm="Phase 3: Writing the report")
+```
+
+After creating all tasks, set up sequential dependencies with `addBlockedBy` so each task depends on the previous one.
+
+### During execution
+
+- **Before starting a step/phase**: `TaskUpdate(taskId, status="in_progress")` — user sees the spinner with the `activeForm` text
+- **After completing a step/phase**: `TaskUpdate(taskId, status="completed")` — user sees the green checkmark ✓
+
+### Task naming rules
+
+- **Subject format**: `Step N: <AgentName> — <short task description>` or `Phase N: <phase-id> (<uses-workflow>)`
+- **activeForm format**: Present continuous — `"Sherlock investigating the codebase"`, `"Phase 2: Analyzing research findings"`
+- Keep both under 60 characters when possible
 
 ## Auto-Continue Logic
 

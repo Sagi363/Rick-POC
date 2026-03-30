@@ -4,7 +4,7 @@ use std::io::{self, Write as IoWrite};
 use crate::error::{RickError, Result};
 use crate::core::agent;
 use crate::core::deps;
-use crate::core::state::{self, WorkflowState, StepState};
+use crate::core::state::{self, WorkflowState, StepState, PhaseState};
 use crate::core::template::{self, TemplateType};
 use crate::core::resolver;
 use crate::core::universe::Universe;
@@ -111,14 +111,34 @@ pub fn list_workflows() -> Result<()> {
     for wf in &workflows {
         println!("\x1b[97m  {}\x1b[0m", wf.name);
         println!("\x1b[90m    {}\x1b[0m", wf.description);
-        println!("\x1b[90m    Steps: {}\x1b[0m", wf.steps.len());
-        for (i, step) in wf.steps.iter().enumerate() {
-            println!(
-                "\x1b[90m      {}. {} - {}\x1b[0m",
-                i + 1,
-                step.agent,
-                step.task
-            );
+        if wf.has_composition() {
+            println!("\x1b[90m    Phases: {}\x1b[0m", wf.steps.len());
+            for (i, step) in wf.steps.iter().enumerate() {
+                if step.is_phase() {
+                    println!(
+                        "\x1b[90m      {}. [phase: {}]\x1b[0m",
+                        i + 1,
+                        step.uses.as_deref().unwrap_or("?")
+                    );
+                } else {
+                    println!(
+                        "\x1b[90m      {}. [{}] {}\x1b[0m",
+                        i + 1,
+                        step.agent,
+                        step.task
+                    );
+                }
+            }
+        } else {
+            println!("\x1b[90m    Steps: {}\x1b[0m", wf.steps.len());
+            for (i, step) in wf.steps.iter().enumerate() {
+                println!(
+                    "\x1b[90m      {}. {} - {}\x1b[0m",
+                    i + 1,
+                    step.agent,
+                    step.task
+                );
+            }
         }
     }
 
@@ -255,16 +275,57 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
 
     let wf_id = WorkflowState::new_id();
 
-    let steps: Vec<StepState> = wf
-        .steps
-        .iter()
-        .map(|s| StepState {
-            id: s.id.clone(),
-            agent: s.agent.clone(),
-            task: s.task.clone(),
-            status: "pending".to_string(),
-        })
-        .collect();
+    let (steps, phases, current_phase, total_phases) = if wf.has_composition() {
+        // Composed workflow: create phases
+        let phase_list: Vec<PhaseState> = wf
+            .steps
+            .iter()
+            .map(|s| {
+                if s.is_phase() {
+                    PhaseState {
+                        id: s.id.clone(),
+                        uses: s.uses.clone(),
+                        description: s.description.clone(),
+                        status: "pending".to_string(),
+                        current_step: 0,
+                        total_steps: 0, // Skill populates children at execution time
+                        steps: Vec::new(),
+                    }
+                } else {
+                    // Direct step wrapped in a synthetic phase
+                    PhaseState {
+                        id: s.id.clone(),
+                        uses: None,
+                        description: s.description.clone(),
+                        status: "pending".to_string(),
+                        current_step: 0,
+                        total_steps: 1,
+                        steps: vec![StepState {
+                            id: s.id.clone(),
+                            agent: s.agent.clone(),
+                            task: s.task.clone(),
+                            status: "pending".to_string(),
+                        }],
+                    }
+                }
+            })
+            .collect();
+        let total = phase_list.len();
+        (Vec::new(), Some(phase_list), Some(0), Some(total))
+    } else {
+        // Flat workflow: regular steps
+        let step_list: Vec<StepState> = wf
+            .steps
+            .iter()
+            .map(|s| StepState {
+                id: s.id.clone(),
+                agent: s.agent.clone(),
+                task: s.task.clone(),
+                status: "pending".to_string(),
+            })
+            .collect();
+        (step_list, None, None, None)
+    };
 
     let state = WorkflowState {
         workflow_id: wf_id.clone(),
@@ -274,6 +335,9 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
         current_step: 0,
         total_steps: wf.steps.len(),
         steps,
+        phases,
+        current_phase,
+        total_phases,
     };
 
     let state_dir = resolver::global_state_dir()?;
@@ -287,29 +351,72 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
     println!();
     println!("\x1b[97m  Execution Plan:\x1b[0m");
 
-    for (i, step) in wf.steps.iter().enumerate() {
-        if i == 0 {
+    if wf.has_composition() {
+        for (i, step) in wf.steps.iter().enumerate() {
+            let marker = if i == 0 { "\x1b[36m->\x1b[0m" } else { "\x1b[90m  \x1b[0m" };
+            if step.is_phase() {
+                let desc = step.description.as_deref().unwrap_or("");
+                println!(
+                    "  {} Phase {}/{}: \x1b[97m{}\x1b[0m (uses: \x1b[36m{}\x1b[0m)",
+                    marker,
+                    i + 1,
+                    wf.steps.len(),
+                    step.id,
+                    step.uses.as_deref().unwrap_or("?")
+                );
+                if !desc.is_empty() {
+                    println!("  \x1b[90m     {}\x1b[0m", desc);
+                }
+            } else {
+                println!(
+                    "  {} {}. \x1b[97m{}\x1b[0m [{}] - {}",
+                    marker,
+                    i + 1,
+                    step.id,
+                    step.agent,
+                    step.task
+                );
+            }
+        }
+        let first = &wf.steps[0];
+        if first.is_phase() {
+            println!();
             println!(
-                "  \x1b[36m->\x1b[0m {}. {} - {}",
-                i + 1,
-                step.agent,
-                step.task
+                "\x1b[36mRick: Ready to execute Phase 1: {} (uses: {})\x1b[0m",
+                first.id,
+                first.uses.as_deref().unwrap_or("?")
             );
         } else {
+            println!();
             println!(
-                "  \x1b[90m  \x1b[0m {}. {} - {}",
-                i + 1,
-                step.agent,
-                step.task
+                "\x1b[36mRick: Ready to execute step 1: {}\x1b[0m",
+                first.agent
             );
         }
+    } else {
+        for (i, step) in wf.steps.iter().enumerate() {
+            if i == 0 {
+                println!(
+                    "  \x1b[36m->\x1b[0m {}. {} - {}",
+                    i + 1,
+                    step.agent,
+                    step.task
+                );
+            } else {
+                println!(
+                    "  \x1b[90m  \x1b[0m {}. {} - {}",
+                    i + 1,
+                    step.agent,
+                    step.task
+                );
+            }
+        }
+        println!();
+        println!(
+            "\x1b[36mRick: Ready to execute step 1: {}\x1b[0m",
+            wf.steps[0].agent
+        );
     }
-
-    println!();
-    println!(
-        "\x1b[36mRick: Ready to execute step 1: {}\x1b[0m",
-        wf.steps[0].agent
-    );
 
     Ok(())
 }
@@ -332,16 +439,67 @@ pub fn status() -> Result<()> {
             "\x1b[97m  {} \x1b[90m({})\x1b[0m",
             s.workflow_name, s.workflow_id
         );
-        println!(
-            "    Status: \x1b[34m{}\x1b[0m  Progress: {}/{}",
-            s.status, s.current_step, s.total_steps
-        );
-        if s.current_step < s.steps.len() {
-            let step = &s.steps[s.current_step];
+
+        if let Some(ref phases) = s.phases {
+            // Nested (composed) display
+            let cp = s.current_phase.unwrap_or(0);
+            let tp = s.total_phases.unwrap_or(phases.len());
             println!(
-                "\x1b[90m    Current: {} - {}\x1b[0m",
-                step.agent, step.task
+                "    Status: \x1b[34m{}\x1b[0m  Phase: {}/{}",
+                s.status, cp, tp
             );
+            for (i, phase) in phases.iter().enumerate() {
+                let icon = match phase.status.as_str() {
+                    "completed" => "\x1b[32m✓\x1b[0m",
+                    "in_progress" | "running" => "\x1b[33m⏳\x1b[0m",
+                    "failed" => "\x1b[31m✗\x1b[0m",
+                    _ => "\x1b[90m⏸\x1b[0m",
+                };
+                if let Some(ref uses) = phase.uses {
+                    println!(
+                        "    {} Phase {}/{}: \x1b[97m{}\x1b[0m ({})",
+                        icon,
+                        i + 1,
+                        tp,
+                        phase.id,
+                        uses
+                    );
+                } else {
+                    println!(
+                        "    {} {}/{}: \x1b[97m{}\x1b[0m [direct]",
+                        icon,
+                        i + 1,
+                        tp,
+                        phase.id
+                    );
+                }
+                // Show child steps if phase has them
+                for step in &phase.steps {
+                    let s_icon = match step.status.as_str() {
+                        "completed" => "\x1b[32m✓\x1b[0m",
+                        "running" => "\x1b[33m▶\x1b[0m",
+                        "failed" => "\x1b[31m✗\x1b[0m",
+                        _ => "\x1b[90m·\x1b[0m",
+                    };
+                    println!(
+                        "\x1b[90m      {} {} [{}]\x1b[0m",
+                        s_icon, step.id, step.agent
+                    );
+                }
+            }
+        } else {
+            // Flat display
+            println!(
+                "    Status: \x1b[34m{}\x1b[0m  Progress: {}/{}",
+                s.status, s.current_step, s.total_steps
+            );
+            if s.current_step < s.steps.len() {
+                let step = &s.steps[s.current_step];
+                println!(
+                    "\x1b[90m    Current: {} - {}\x1b[0m",
+                    step.agent, step.task
+                );
+            }
         }
     }
 

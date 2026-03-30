@@ -159,6 +159,48 @@ steps:
 
 Each step invokes a specific agent with a task. `checkpoint: true` pauses for your review before continuing. Each agent receives the output of previous steps as context.
 
+### Workflow Composition
+
+Workflows can embed other workflows using `uses`. Build small, focused workflows — then compose them into larger pipelines. Improve a child workflow once, every parent benefits.
+
+```yaml
+# workflows/research.yaml — a small, reusable workflow
+name: Research
+steps:
+  - id: gather
+    agent: researcher
+    task: "Find information about {{topic}}"
+    auto_continue: true
+  - id: summarize
+    agent: researcher
+    task: "Summarize findings into key points"
+```
+
+```yaml
+# workflows/full-report.yaml — composes smaller workflows
+name: Full Report
+params:
+  topic:
+    description: "What to research"
+    required: true
+steps:
+  - id: research
+    uses: research                        # Embeds the Research workflow
+    description: "Phase 1: Gather data"
+    params:
+      topic: "{{topic}}"
+    auto_continue: false
+
+  - id: analyze
+    uses: analysis                        # Embeds an Analysis workflow
+    description: "Phase 2: Analyze findings"
+    params:
+      data: "{{step_outputs.research.summarize}}"
+    auto_continue: false
+```
+
+At runtime, Rick flattens `uses` phases into their child steps (e.g., `research.gather`, `research.summarize`) and wires outputs between phases automatically. Parameters support `{{step_outputs.phase.step}}` to pass results from one phase to the next.
+
 ## Creating a Universe
 
 ```
