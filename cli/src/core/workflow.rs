@@ -14,6 +14,14 @@ pub struct WorkflowStep {
     pub checkpoint: bool,
     pub expected_output: String,
     pub next: String,
+    /// If set, this step embeds another workflow (composition).
+    pub uses: Option<String>,
+    /// Parameter mappings for composed workflows (child_param -> template).
+    pub params: Option<Vec<(String, String)>>,
+    /// Human-readable description of this phase.
+    pub description: Option<String>,
+    /// Controls pause between phases (not child internal steps).
+    pub auto_continue: Option<bool>,
 }
 
 /// A workflow definition.
@@ -68,6 +76,24 @@ impl Workflow {
                         .to_string();
                     let next = step_val.get_str("next").unwrap_or("end").to_string();
 
+                    let uses = step_val.get_str("uses").map(|s| s.to_string());
+                    let description = step_val.get_str("description").map(|s| s.to_string());
+                    let auto_continue = step_val
+                        .get("auto_continue")
+                        .and_then(|v| v.as_bool());
+
+                    let params = step_val.get("params").and_then(|p| {
+                        if let Some(entries) = p.as_map() {
+                            let pairs: Vec<(String, String)> = entries
+                                .iter()
+                                .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                .collect();
+                            if pairs.is_empty() { None } else { Some(pairs) }
+                        } else {
+                            None
+                        }
+                    });
+
                     steps.push(WorkflowStep {
                         id,
                         agent,
@@ -75,6 +101,10 @@ impl Workflow {
                         checkpoint,
                         expected_output,
                         next,
+                        uses,
+                        params,
+                        description,
+                        auto_continue,
                     });
                 }
             }
@@ -87,6 +117,18 @@ impl Workflow {
             steps,
             file_name,
         })
+    }
+
+    /// Returns true if any step uses workflow composition (`uses` keyword).
+    pub fn has_composition(&self) -> bool {
+        self.steps.iter().any(|s| s.uses.is_some())
+    }
+}
+
+impl WorkflowStep {
+    /// Returns true if this step is a composition phase (has `uses`).
+    pub fn is_phase(&self) -> bool {
+        self.uses.is_some()
     }
 }
 
