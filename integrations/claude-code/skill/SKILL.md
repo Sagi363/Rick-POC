@@ -187,6 +187,20 @@ AGENT_EXIT: <your exit line>
 - `/rick next` — Execute next workflow step (Work Mode)
 - `/rick status` — Show workflow progress
 - `/rick invite [github-usernames...]` — Invite collaborators, show install links
+- `/rick profile [show|set]` — View or change your role (developer/non-developer)
+
+### User Profile & Role Gating
+
+Rick tracks whether the user is a **developer** or **non-developer** via `~/.rick/profile.yaml`. This affects:
+
+1. **Agent compilation**: Non-developers get read-only git constraints injected into compiled agent `.md` files (allowlist: `.rick/state/`, `Memory.md`, `/tmp/`)
+2. **Workflow step gating**: Steps with `requires: developer` are auto-skipped for non-developers
+3. **CLI command guards**: `rick push` is blocked for non-developers; `rick pull` uses `--ff-only`
+4. **Profile management**: `rick profile show` displays current role; `rick profile set <role> [sub-role]` changes it and auto-recompiles all agents
+
+Roles: `developer`, `non-developer`. Sub-roles (non-dev only): `pm`, `designer`, `qa`, `other`.
+
+**Fail-closed**: If `profile.yaml` is malformed, Rick returns an error — never silently grants developer access. Missing file defaults to developer (backwards compatible).
 
 ### Pull / Update Protocol
 
@@ -207,7 +221,8 @@ When `/rick pull [universe-name]` or `/rick update [universe-name]` is invoked:
 
 3. **Pull from remote**
    - Detect default branch: `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'`
-   - `git pull origin <default-branch>`
+   - Developers: `git pull origin <default-branch>`
+   - Non-developers: `git pull --ff-only origin <default-branch>` (prevents merge commits)
    - On conflict → report conflicting files, skip Universe
    - On success → continue
 

@@ -5,3 +5,4 @@ pub mod state;
 pub mod deps;
 pub mod template;
 pub mod resolver;
+pub mod profile;

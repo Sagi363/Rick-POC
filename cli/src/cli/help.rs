@@ -18,6 +18,7 @@ pub fn print_help() {
     println!("  pull [name]         Pull latest from remote and recompile agents");
     println!("  update [name]       Alias for pull");
     println!("  push                Commit and push Universe changes, then recompile");
+    println!("  profile [show|set]  View or change your role (developer/non-developer)");
     println!("  invite [users...]   Invite GitHub users as collaborators + show install link");
     println!("  list agents         List all agents in the universe");
     println!("  list workflows      List all workflows in the universe");
