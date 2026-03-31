@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{RickError, Result};
+use crate::core::profile::Profile;
 use crate::core::universe::Universe;
 use crate::parsers::yaml;
 
@@ -134,7 +135,8 @@ impl Agent {
     }
 
     /// Compile this agent into a Claude Code sub-agent markdown file.
-    pub fn compile(&self, universe_name: &str, output_dir: &Path, universe_path: &Path) -> Result<PathBuf> {
+    /// If profile is non-developer, role constraints are injected.
+    pub fn compile(&self, universe_name: &str, output_dir: &Path, universe_path: &Path, profile: &Profile) -> Result<PathBuf> {
         fs::create_dir_all(output_dir)?;
 
         let filename = format!("rick-{}-{}.md", universe_name, self.name);
@@ -182,6 +184,16 @@ impl Agent {
             Keep entries concise — one line per learning, grouped by topic. Do NOT remove existing entries.\n",
             memory_path.display()
         ));
+
+        // Role-based constraints (non-developer gets read-only rules)
+        let constraints = profile.git_constraints();
+        if !constraints.is_empty() {
+            content.push('\n');
+            content.push_str(&constraints);
+            if !constraints.ends_with('\n') {
+                content.push('\n');
+            }
+        }
 
         fs::write(&output_path, &content)?;
         Ok(output_path)

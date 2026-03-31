@@ -96,6 +96,10 @@ fn run() -> error::Result<()> {
             commands::pull(name)?;
         }
         "push" => commands::push()?,
+        "profile" => {
+            let sub_args: Vec<&str> = args[1..].iter().map(|s| s.as_str()).collect();
+            commands::profile(&sub_args)?;
+        }
         "setup" => {
             // Parse flags: --universe <url>, --install-deps, --non-interactive
             let universe_url = args.windows(2)

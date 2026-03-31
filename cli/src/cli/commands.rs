@@ -4,6 +4,7 @@ use std::io::{self, Write as IoWrite};
 use crate::error::{RickError, Result};
 use crate::core::agent;
 use crate::core::deps;
+use crate::core::profile::Profile;
 use crate::core::state::{self, WorkflowState, StepState, PhaseState};
 use crate::core::template::{self, TemplateType};
 use crate::core::resolver;
@@ -183,6 +184,7 @@ pub fn list_universes() -> Result<()> {
 /// Execute the `compile` command. Optionally specify a universe name.
 pub fn compile(universe_name: Option<&str>) -> Result<()> {
     let cwd = env::current_dir()?;
+    let profile = Profile::load_or_default()?;
     let universe = match universe_name {
         Some(name) => resolver::resolve_universe(name)?,
         None => resolver::resolve_universe_from_cwd()?,
@@ -198,7 +200,7 @@ pub fn compile(universe_name: Option<&str>) -> Result<()> {
     let mut compiled_paths = Vec::new();
 
     for a in &agents {
-        let path = a.compile(&universe.name, &output_dir, &universe.path)?;
+        let path = a.compile(&universe.name, &output_dir, &universe.path, &profile)?;
         compiled_paths.push(path);
     }
 
@@ -313,15 +315,27 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
         let total = phase_list.len();
         (Vec::new(), Some(phase_list), Some(0), Some(total))
     } else {
-        // Flat workflow: regular steps
+        // Flat workflow: regular steps (with role gating)
+        let profile = Profile::load_or_default()?;
         let step_list: Vec<StepState> = wf
             .steps
             .iter()
-            .map(|s| StepState {
-                id: s.id.clone(),
-                agent: s.agent.clone(),
-                task: s.task.clone(),
-                status: "pending".to_string(),
+            .map(|s| {
+                let status = if let Some(ref req) = s.requires_role {
+                    if matches!(req, workflow::RequiredRole::Developer) && !profile.is_developer() {
+                        "skipped".to_string()
+                    } else {
+                        "pending".to_string()
+                    }
+                } else {
+                    "pending".to_string()
+                };
+                StepState {
+                    id: s.id.clone(),
+                    agent: s.agent.clone(),
+                    task: s.task.clone(),
+                    status,
+                }
             })
             .collect();
         (step_list, None, None, None)
@@ -394,8 +408,18 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
             );
         }
     } else {
+        let profile = Profile::load_or_default()?;
         for (i, step) in wf.steps.iter().enumerate() {
-            if i == 0 {
+            let is_skipped = matches!(step.requires_role, Some(workflow::RequiredRole::Developer))
+                && !profile.is_developer();
+            if is_skipped {
+                println!(
+                    "  \x1b[90m  {}. {} - {} \x1b[33m(skipped: requires developer)\x1b[0m",
+                    i + 1,
+                    step.agent,
+                    step.task
+                );
+            } else if i == 0 {
                 println!(
                     "  \x1b[36m->\x1b[0m {}. {} - {}",
                     i + 1,
@@ -412,10 +436,20 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
             }
         }
         println!();
-        println!(
-            "\x1b[36mRick: Ready to execute step 1: {}\x1b[0m",
-            wf.steps[0].agent
-        );
+        // Find first non-skipped step for the "Ready" message
+        let first_active = wf.steps.iter().enumerate().find(|(_, s)| {
+            !matches!(s.requires_role, Some(workflow::RequiredRole::Developer))
+                || profile.is_developer()
+        });
+        if let Some((idx, step)) = first_active {
+            println!(
+                "\x1b[36mRick: Ready to execute step {}: {}\x1b[0m",
+                idx + 1,
+                step.agent
+            );
+        } else {
+            println!("\x1b[33mRick: All steps require developer role. Nothing to execute.\x1b[0m");
+        }
     }
 
     Ok(())
@@ -609,11 +643,12 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
     println!();
     println!("\x1b[36mRick: Compiling agents...\x1b[0m");
 
+    let profile = Profile::load_or_default()?;
     let cwd = env::current_dir()?;
     let output_dir = cwd.join(".claude").join("agents");
     let mut compiled_count = 0;
     for a in &agents {
-        a.compile(&universe.name, &output_dir, &universe.path)?;
+        a.compile(&universe.name, &output_dir, &universe.path, &profile)?;
         compiled_count += 1;
     }
 
@@ -706,9 +741,15 @@ pub fn pull(universe_name: Option<&str>) -> Result<()> {
             }
         };
 
-        // Step 3b: Pull
+        // Step 3b: Pull (non-developers use --ff-only to avoid merge commits)
+        let pull_profile = Profile::load_or_default()?;
+        let pull_args: Vec<&str> = if pull_profile.is_developer() {
+            vec!["pull", "origin", &default_branch]
+        } else {
+            vec!["pull", "--ff-only", "origin", &default_branch]
+        };
         let pull_output = std::process::Command::new("git")
-            .args(["pull", "origin", &default_branch])
+            .args(&pull_args)
             .current_dir(uni_path)
             .output()
             .map_err(|e| RickError::Io(e))?;
@@ -768,12 +809,13 @@ pub fn pull(universe_name: Option<&str>) -> Result<()> {
         }
 
         // Recompile all current agents
+        let profile = Profile::load_or_default()?;
         let output_dir = cwd.join(".claude").join("agents");
         std::fs::create_dir_all(&output_dir)?;
         let agents = agent::load_agents(&universe).unwrap_or_default();
         let mut compiled_count = 0;
         for a in &agents {
-            a.compile(&universe.name, &output_dir, &universe.path)?;
+            a.compile(&universe.name, &output_dir, &universe.path, &profile)?;
             compiled_count += 1;
         }
 
@@ -849,7 +891,26 @@ pub fn next() -> Result<()> {
         return Ok(());
     }
 
-    let next_step = current.current_step + 1;
+    // Find the next non-skipped step
+    let mut next_step = current.current_step + 1;
+    while next_step < current.steps.len() {
+        if current.steps[next_step].status == "skipped" {
+            println!(
+                "\x1b[90m  Skipping step {}: {} (requires developer)\x1b[0m",
+                next_step + 1,
+                current.steps[next_step].agent
+            );
+            next_step += 1;
+        } else {
+            break;
+        }
+    }
+
+    if next_step >= current.total_steps {
+        println!("\x1b[36mRick: Workflow \"{}\" is complete! (remaining steps were skipped)\x1b[0m", current.workflow_name);
+        return Ok(());
+    }
+
     let step = &current.steps[next_step];
 
     println!(
@@ -861,6 +922,95 @@ pub fn next() -> Result<()> {
         "\x1b[90m  Task: {}\x1b[0m",
         step.task
     );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Profile command
+// ---------------------------------------------------------------------------
+
+/// Execute the `profile` command — view or change user role.
+pub fn profile(args: &[&str]) -> Result<()> {
+    match args.first().copied() {
+        None | Some("show") => {
+            let prof = Profile::load_or_default()?;
+            println!("\x1b[36mRick: Current Profile:\x1b[0m");
+            println!();
+            println!("  Role:     \x1b[97m{}\x1b[0m", prof.role_display());
+            if let Some(sr) = prof.sub_role_display() {
+                println!("  Sub-role: \x1b[97m{}\x1b[0m", sr);
+            }
+            println!();
+            println!("\x1b[90m  Change with: rick profile set <developer|non-developer> [sub-role]\x1b[0m");
+        }
+        Some("set") => {
+            if args.len() < 2 {
+                return Err(RickError::InvalidState(
+                    "Missing role. Use 'rick profile set developer' or 'rick profile set non-developer'.".to_string(),
+                ));
+            }
+            let role_str = args[1];
+            let sub_role_str = args.get(2).copied();
+
+            let role = match role_str {
+                "developer" | "dev" => crate::core::profile::Role::Developer,
+                "non-developer" | "nondev" => crate::core::profile::Role::NonDeveloper,
+                other => {
+                    return Err(RickError::InvalidState(format!(
+                        "Unknown role '{}'. Use 'developer' or 'non-developer'.", other
+                    )));
+                }
+            };
+
+            let sub_role = match sub_role_str {
+                Some("pm") => Some(crate::core::profile::SubRole::PM),
+                Some("designer") => Some(crate::core::profile::SubRole::Designer),
+                Some("qa") => Some(crate::core::profile::SubRole::QA),
+                Some("other") => Some(crate::core::profile::SubRole::Other),
+                Some(unknown) => {
+                    return Err(RickError::InvalidState(format!(
+                        "Unknown sub-role '{}'. Use 'pm', 'designer', 'qa', or 'other'.", unknown
+                    )));
+                }
+                None => None,
+            };
+
+            let prof = Profile { role, sub_role };
+            let path = Profile::path()?;
+            prof.save(&path)?;
+
+            println!("\x1b[32mRick: Profile updated to '{}'.\x1b[0m", prof.role_display());
+
+            // Auto-recompile all installed universes
+            let all = resolver::list_all_universes()?;
+            if all.is_empty() {
+                println!("\x1b[90m  Run 'rick compile' after installing a Universe to apply constraints.\x1b[0m");
+            } else {
+                let cwd = env::current_dir()?;
+                let output_dir = cwd.join(".claude").join("agents");
+                let mut total = 0;
+                for (universe, _source) in &all {
+                    let agents = agent::load_agents(universe).unwrap_or_default();
+                    for a in &agents {
+                        let _ = a.compile(&universe.name, &output_dir, &universe.path, &prof);
+                        total += 1;
+                    }
+                }
+                if total > 0 {
+                    println!("\x1b[32m  Recompiled {} agents with new role constraints.\x1b[0m", total);
+                }
+            }
+        }
+        Some(other) => {
+            // Treat as shorthand: `rick profile developer` = `rick profile set developer`
+            let mut new_args = vec!["set", other];
+            if args.len() > 1 {
+                new_args.extend_from_slice(&args[1..]);
+            }
+            return profile(&new_args.iter().map(|s| *s).collect::<Vec<&str>>());
+        }
+    }
 
     Ok(())
 }
@@ -904,7 +1054,11 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool, non_interactive: bo
     )?;
     println!("  {} Memory       {}", memory_status.icon(), memory_status.message("~/.rick/persona/Memory.md"));
 
-    // Step 2b: Fetch ground rules from GitHub
+    // Step 2b: User profile (role selection)
+    let profile_status = setup_profile(&home, non_interactive)?;
+    println!("  {} Profile      {}", profile_status.icon(), profile_status.message("~/.rick/profile.yaml"));
+
+    // Step 2c: Fetch ground rules from GitHub
     let gr_status = fetch_ground_rules(&home)?;
     println!("  {} Ground rules {}", gr_status.icon(), gr_status.message("~/.rick/ground-rules.md"));
 
@@ -979,6 +1133,59 @@ fn write_if_needed(path: &str, content: &str) -> Result<WriteStatus> {
     }
 
     std::fs::write(p, content)?;
+    Ok(WriteStatus::Created)
+}
+
+/// Set up the user profile during `rick setup`. Never overwrites existing profile.
+fn setup_profile(home: &str, non_interactive: bool) -> Result<WriteStatus> {
+    let profile_path = format!("{}/.rick/profile.yaml", home);
+    let p = std::path::Path::new(&profile_path);
+
+    if p.exists() {
+        return Ok(WriteStatus::Unchanged);
+    }
+
+    if non_interactive {
+        // Default to developer in non-interactive mode (CI, piped install)
+        let profile = Profile {
+            role: crate::core::profile::Role::Developer,
+            sub_role: None,
+        };
+        profile.save(p)?;
+        return Ok(WriteStatus::Created);
+    }
+
+    println!();
+    println!("    \x1b[97mWhat's your role?\x1b[0m");
+    println!("      [1] Developer — I write and commit code");
+    println!("      [2] Non-developer — I review, manage, design (read-only git)");
+    println!();
+
+    let choice = read_user_choice("    Choose [1/2]: ", "1");
+
+    let (role, sub_role) = match choice.as_str() {
+        "2" => {
+            println!();
+            println!("    \x1b[97mWhat kind of non-developer?\x1b[0m");
+            println!("      [1] PM / Product Manager");
+            println!("      [2] Designer");
+            println!("      [3] QA / Tester");
+            println!("      [4] Other");
+            println!();
+            let sub = read_user_choice("    Choose [1/2/3/4]: ", "1");
+            let sub_role = match sub.as_str() {
+                "2" => crate::core::profile::SubRole::Designer,
+                "3" => crate::core::profile::SubRole::QA,
+                "4" => crate::core::profile::SubRole::Other,
+                _ => crate::core::profile::SubRole::PM,
+            };
+            (crate::core::profile::Role::NonDeveloper, Some(sub_role))
+        }
+        _ => (crate::core::profile::Role::Developer, None),
+    };
+
+    let profile = Profile { role, sub_role };
+    profile.save(p)?;
     Ok(WriteStatus::Created)
 }
 
@@ -1597,6 +1804,14 @@ fn extract_gh_repo(url: &str) -> Option<String> {
 /// Execute the `push` command — commit and push Universe changes, then recompile.
 /// Note: push operates ON the universe repo, so cwd must be inside a Universe.
 pub fn push() -> Result<()> {
+    // Non-developers cannot push Universe changes
+    let profile = Profile::load_or_default()?;
+    if !profile.is_developer() {
+        return Err(RickError::InvalidState(
+            "Push is restricted to developer profiles. Change your role with 'rick profile set developer'.".to_string(),
+        ));
+    }
+
     let cwd = env::current_dir()?;
     let _universe = Universe::load(&cwd).or_else(|_| resolver::resolve_universe_from_cwd())?;
 

@@ -5,6 +5,13 @@ use crate::error::{RickError, Result};
 use crate::core::universe::Universe;
 use crate::parsers::yaml;
 
+/// Role required to execute a workflow step.
+/// Strict enum — unknown values cause a parse error.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RequiredRole {
+    Developer,
+}
+
 /// A single step in a workflow.
 #[derive(Debug, Clone)]
 pub struct WorkflowStep {
@@ -22,6 +29,8 @@ pub struct WorkflowStep {
     pub description: Option<String>,
     /// Controls pause between phases (not child internal steps).
     pub auto_continue: Option<bool>,
+    /// Role required to execute this step (None = everyone can run it).
+    pub requires_role: Option<RequiredRole>,
 }
 
 /// A workflow definition.
@@ -94,6 +103,17 @@ impl Workflow {
                         }
                     });
 
+                    let requires_role = match step_val.get_str("requires") {
+                        Some("developer") => Some(RequiredRole::Developer),
+                        Some(unknown) => {
+                            return Err(RickError::Parse(format!(
+                                "Unknown requires role '{}' in step '{}'. Expected 'developer'.",
+                                unknown, id
+                            )));
+                        }
+                        None => None,
+                    };
+
                     steps.push(WorkflowStep {
                         id,
                         agent,
@@ -105,6 +125,7 @@ impl Workflow {
                         params,
                         description,
                         auto_continue,
+                        requires_role,
                     });
                 }
             }
@@ -161,4 +182,84 @@ pub fn load_workflows(universe: &Universe) -> Result<Vec<Workflow>> {
     }
 
     Ok(workflows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn create_temp_dir() -> std::path::PathBuf {
+        let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::path::PathBuf::from(format!(
+            "/tmp/rick-wf-test-{}-{}",
+            std::process::id(),
+            id
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    }
+
+    fn write_workflow(dir: &std::path::Path, content: &str) -> std::path::PathBuf {
+        let path = dir.join("test.yaml");
+        std::fs::write(&path, content).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_requires_developer_parses() {
+        let dir = create_temp_dir();
+        let path = write_workflow(&dir, r#"
+name: test
+version: "1.0"
+description: test wf
+steps:
+  - id: s1
+    agent: dev
+    task: code it
+    requires: developer
+"#);
+        let wf = Workflow::load(&path).unwrap();
+        assert_eq!(wf.steps[0].requires_role, Some(RequiredRole::Developer));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_requires_absent_is_none() {
+        let dir = create_temp_dir();
+        let path = write_workflow(&dir, r#"
+name: test
+version: "1.0"
+description: test wf
+steps:
+  - id: s1
+    agent: pm
+    task: review
+"#);
+        let wf = Workflow::load(&path).unwrap();
+        assert_eq!(wf.steps[0].requires_role, None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_requires_unknown_fails() {
+        let dir = create_temp_dir();
+        let path = write_workflow(&dir, r#"
+name: test
+version: "1.0"
+description: test wf
+steps:
+  - id: s1
+    agent: dev
+    task: code it
+    requires: admin
+"#);
+        let result = Workflow::load(&path);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("Unknown requires role"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
