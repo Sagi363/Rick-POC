@@ -155,6 +155,27 @@ fn parse_block(lines: &[&str], start: usize, base_indent: usize) -> Result<(Yaml
                                         i += 1;
                                     }
                                     map_entries.push((k, YamlValue::String(block_lines.join("\n"))));
+                                } else if matches!(v, YamlValue::Null) {
+                                    // Key with no inline value — check for nested block
+                                    i += 1;
+                                    if i < lines.len() {
+                                        let peek = lines[i];
+                                        let peek_trimmed = peek.trim();
+                                        if !peek_trimmed.is_empty() && !peek_trimmed.starts_with('#') {
+                                            let peek_indent = indent_level(peek);
+                                            if peek_indent > indent3 {
+                                                let (block_val, new_i) = parse_block(lines, i, peek_indent)?;
+                                                map_entries.push((k, block_val));
+                                                i = new_i;
+                                            } else {
+                                                map_entries.push((k, YamlValue::Null));
+                                            }
+                                        } else {
+                                            map_entries.push((k, YamlValue::Null));
+                                        }
+                                    } else {
+                                        map_entries.push((k, YamlValue::Null));
+                                    }
                                 } else {
                                     map_entries.push((k, v));
                                     i += 1;

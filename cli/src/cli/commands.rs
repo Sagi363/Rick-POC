@@ -1,10 +1,15 @@
 use std::env;
 use std::io::{self, Write as IoWrite};
+use std::sync::Arc;
+use std::collections::HashMap;
 
+use crate::a2a::types::*;
 use crate::error::{RickError, Result};
 use crate::core::agent;
 use crate::core::deps;
 use crate::core::profile::Profile;
+use crate::core::runtime::RuntimeRegistry;
+use crate::core::scheduler::{DagScheduler, SchedulerEvent, linearize_steps};
 use crate::core::state::{self, WorkflowState, StepState, PhaseState};
 use crate::core::template::{self, TemplateType};
 use crate::core::resolver;
@@ -177,6 +182,43 @@ pub fn list_universes() -> Result<()> {
         println!("\x1b[90m    Path: {}\x1b[0m", u.path.display());
         println!();
     }
+
+    Ok(())
+}
+
+/// Execute the `runtimes` command — list discovered runtime backends.
+pub fn runtimes() -> Result<()> {
+    let registry = RuntimeRegistry::discover();
+    let tools = registry.list_available_tools();
+
+    let any_available = tools.iter().any(|(_, avail)| *avail);
+    if !any_available {
+        println!("\x1b[36mRick: No runtime tools found.\x1b[0m");
+        println!("\x1b[90m  Install Claude Code (claude) or Cursor (agent) to get started.\x1b[0m");
+        return Ok(());
+    }
+
+    println!("\x1b[36mRick: Available runtime tools:\x1b[0m");
+    println!();
+
+    for (tool, available) in &tools {
+        let status_icon = if *available { "✓" } else { "✗" };
+        let status_color = if *available { "\x1b[32m" } else { "\x1b[31m" };
+        let cli_name = match *tool {
+            "claude" => "claude (Claude Code CLI)",
+            "cursor" => "agent (Cursor CLI)",
+            _ => tool,
+        };
+
+        println!(
+            "  \x1b[97m{:<10}\x1b[0m {:<30} {}{}\x1b[0m",
+            tool, cli_name, status_color, status_icon
+        );
+    }
+
+    println!();
+    println!("\x1b[90m  Models are configured per-agent in tools.md (tool + model fields).\x1b[0m");
+    println!("\x1b[90m  Rick passes model names through to --model. If the CLI rejects it, Rick reports the error.\x1b[0m");
 
     Ok(())
 }
@@ -452,7 +494,191 @@ pub fn run(workflow_name: &str, force: bool) -> Result<()> {
         }
     }
 
+    println!();
+
+    // A2A EXECUTION: Discover runtimes and execute workflow
+    let registry = Arc::new(RuntimeRegistry::discover());
+    let tools = registry.list_available_tools();
+
+    let any_available = tools.iter().any(|(_, avail)| *avail);
+    if !any_available {
+        return Err(RickError::InvalidState(
+            "No runtimes available. Install Claude Code ('claude') or Cursor ('agent').".to_string(),
+        ));
+    }
+
+    println!("\x1b[36mRick: Available tools:\x1b[0m");
+    for (tool, avail) in &tools {
+        if *avail {
+            println!("  \x1b[90m{} ✓\x1b[0m", tool);
+        }
+    }
+    println!();
+
+    // Load agents and build personas + runtime configs
+    let agent_map: HashMap<String, agent::Agent> = agents
+        .into_iter()
+        .map(|a| (a.name.clone(), a))
+        .collect();
+
+    // Collect agent runtime configs for the scheduler
+    let agent_configs: HashMap<String, agent::AgentRuntimeConfig> = agent_map
+        .iter()
+        .filter_map(|(name, ag)| {
+            ag.runtime_config().map(|cfg| (name.clone(), cfg))
+        })
+        .collect();
+
+    // Auto-linearize if no dependencies (backward compat)
+    let mut steps = wf.steps.clone();
+    linearize_steps(&mut steps);
+
+    // Execute via scheduler
+    println!("\x1b[36mRick: Executing workflow...\x1b[0m");
+    println!();
+
+    let scheduler = DagScheduler::new(steps.clone(), registry.clone(), agent_configs);
+
+    // Clone data needed by closures
+    let agent_map_clone = agent_map.clone();
+    let wf_id_clone = wf_id.clone();
+
+    let results = scheduler.execute_all(
+        move |step, completed_results| {
+            // Build TaskRequest for this step
+            let agent = agent_map_clone.get(&step.agent).ok_or_else(|| {
+                RickError::NotFound(format!("Agent '{}' not found", step.agent))
+            })?;
+
+            let persona = agent.compile_persona();
+
+            // Build prior step summaries from completed results
+            let prior_summaries: Vec<PriorStepSummary> = completed_results
+                .iter()
+                .filter_map(|r| {
+                    if let Ok(ref resp) = r.response {
+                        Some(PriorStepSummary {
+                            step_id: r.step_id.clone(),
+                            agent: step.agent.clone(),
+                            role: persona.role.clone(),
+                            entry: resp.output.entry.clone(),
+                            exit: resp.output.exit.clone(),
+                            summary: truncate(&resp.output.content, 200).to_string(),
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Inject personality template
+            let description = crate::core::personality::inject_personality_template(
+                &step.task,
+                &prior_summaries,
+            );
+
+            Ok(TaskRequest {
+                task_id: format!("{}-{}", wf_id_clone, step.id),
+                session_id: wf_id_clone.clone(),
+                description,
+                context: TaskContext {
+                    workflow_id: wf_id_clone.clone(),
+                    step_id: step.id.clone(),
+                    agent_persona: persona,
+                    prior_steps: prior_summaries,
+                },
+                artifacts: vec![],
+            })
+        },
+        {
+            // Clone data the event handler needs for personality display
+            let event_agent_map = agent_map.clone();
+            let event_steps = steps.clone();
+
+            move |event| {
+                match event {
+                    SchedulerEvent::StepStarted { step_id, runtime_id } => {
+                        if let Some(step) = event_steps.iter().find(|s| s.id == *step_id) {
+                            if let Some(ag) = event_agent_map.get(&step.agent) {
+                                let handoff = crate::core::personality::generate_handoff(
+                                    &ag.name,
+                                    &ag.soul_first_line,
+                                    &step.task,
+                                );
+                                println!(
+                                    "\n\x1b[1mRick:\x1b[0m {} \x1b[90m[{}]\x1b[0m",
+                                    handoff, runtime_id
+                                );
+                            }
+                        }
+                    }
+                    SchedulerEvent::StepCompleted {
+                        step_id, entry, content, exit, duration_ms, ..
+                    } => {
+                        if let Some(step) = event_steps.iter().find(|s| s.id == *step_id) {
+                            if let Some(ag) = event_agent_map.get(&step.agent) {
+                                if !entry.is_empty() {
+                                    println!(
+                                        "\x1b[1m{} ({}):\x1b[0m \x1b[3m{}\x1b[0m",
+                                        ag.name, ag.soul_first_line, entry
+                                    );
+                                }
+                                if !content.is_empty() {
+                                    let display = if content.len() > 500 {
+                                        let mut idx = 500;
+                                        while !content.is_char_boundary(idx) && idx > 0 {
+                                            idx -= 1;
+                                        }
+                                        format!("{}...", &content[..idx])
+                                    } else {
+                                        content.clone()
+                                    };
+                                    println!("\x1b[3m{}\x1b[0m", display);
+                                }
+                                if !exit.is_empty() {
+                                    println!("\x1b[3m{}\x1b[0m", exit);
+                                }
+                                let recap = crate::core::personality::generate_recap(
+                                    &ag.name,
+                                    *duration_ms,
+                                    None,
+                                );
+                                println!("\n\x1b[1mRick:\x1b[0m {}", recap);
+                            }
+                        }
+                    }
+                    SchedulerEvent::StepFailed { step_id, error, .. } => {
+                        println!(
+                            "\n\x1b[31mRick: Step '{}' failed: {}\x1b[0m",
+                            step_id, error
+                        );
+                    }
+                }
+            }
+        },
+    )?;
+
+    // Update state to completed
+    let mut final_state = state;
+    final_state.status = "completed".to_string();
+    final_state.current_step = final_state.total_steps;
+    final_state.save(&state_dir)?;
+
+    println!("\n\x1b[32mRick: All {} steps complete.\x1b[0m", results.len());
+
     Ok(())
+}
+
+fn truncate(s: &str, max_len: usize) -> &str {
+    if s.len() <= max_len {
+        s
+    } else {
+        let mut idx = max_len;
+        while !s.is_char_boundary(idx) && idx > 0 {
+            idx -= 1;
+        }
+        &s[..idx]
+    }
 }
 
 /// Execute the `status` command.

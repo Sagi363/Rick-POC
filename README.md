@@ -9,10 +9,13 @@ Define teams of specialized AI agents, wire them into workflows, and share them 
 
 ## The Problem
 
-AI coding assistants are powerful — but every developer configures them in isolation.
+AI coding assistants are powerful — but they're isolated and inflexible.
 
 🏝️ **Workflows live in silos.**
 One developer crafts the perfect prompt chain: PM writes PRD → Designer specs UI → Developer implements. It works great — but it stays on their machine. The rest of the team never sees it.
+
+🔒 **Locked into single providers.**
+You pay for Claude Code, Cursor, and other AI tools — but can't use them together. Each workflow is stuck with one tool's models, token limits, and pricing. You can't mix the best tool for each task or optimize costs across your subscriptions.
 
 🔄 **Improvements don't propagate.**
 Someone figures out a better way to structure agent instructions, adds guardrails, tunes a workflow — those gains are local. Every other developer is still running their old version. There's no `git pull` for AI workflows.
@@ -20,7 +23,7 @@ Someone figures out a better way to structure agent instructions, adds guardrail
 🚧 **Setup is a barrier.**
 Configuring effective AI agents requires prompt engineering, MCP servers, tool permissions, and model tuning. In practice, only the "AI expert" sets things up. Everyone else gets a worse experience — or none at all.
 
-✅ **Rick fixes this** by making AI workflows **versionable, shareable, and installable** — just like code.
+✅ **Rick fixes this** by making AI workflows **versionable, shareable, and installable** — and now, **multi-runtime** so you can use all the tools you're already paying for.
 
 ## How Rick Solves It
 
@@ -200,6 +203,94 @@ steps:
 ```
 
 At runtime, Rick flattens `uses` phases into their child steps (e.g., `research.gather`, `research.summarize`) and wires outputs between phases automatically. Parameters support `{{step_outputs.phase.step}}` to pass results from one phase to the next.
+
+## Multi-Runtime Support (A2A v3)
+
+**New in v0.11.0**: Rick can orchestrate agents across multiple AI runtimes — Claude Code, Cursor, and future platforms.
+
+Rick uses the [Agent2Agent (A2A) protocol](https://a2a.ai/) — an industry-standard agent communication protocol backed by Google, Microsoft, IBM, and 150+ organizations — to coordinate agents across different AI tools. This means Rick isn't locked to a single provider. Your PM agent can run on Claude Sonnet, your Architect on Claude Opus, and your Frontend Dev on Cursor — all in the same workflow.
+
+### Runtime Configuration
+
+Each agent declares its preferred runtime in `tools.md`:
+
+```yaml
+# agents/pm/tools.md
+runtime:
+  preferred:
+    tool: claude
+    model: sonnet
+  fallback:
+    - tool: cursor
+      model: composer-2-fast
+```
+
+Workflow steps can override the agent's default:
+
+```yaml
+# workflows/example.yaml
+steps:
+  - id: design
+    agent: architect
+    runtime:
+      tool: claude
+      model: opus          # Use Opus instead of agent's default
+```
+
+**Supported runtimes**:
+- `claude` — Claude Code CLI (`claude -p --model <model>`)
+- `cursor` — Cursor CLI (`agent -p --model <model>`)
+
+Model names are user-configurable — change the model in `tools.md` and Rick passes it through to the CLI. If the CLI rejects it, Rick reports a clear error.
+
+### Intelligent Runtime Routing
+
+Rick automatically picks the best execution path:
+
+**Sub-Agent (free)**: When the agent's runtime matches your current Claude Code or Cursor session, Rick uses a sub-agent (no CLI invocation, no API cost).
+
+**CLI Invocation**: When the agent needs a different model or tool, Rick shells out to the appropriate CLI with the exact model requested.
+
+**Example**:
+```
+Host: Claude Sonnet
+Agent PM: claude/sonnet  → Sub-agent (free)
+Agent Architect: claude/opus  → CLI: claude -p --model opus
+Agent Frontend: cursor/composer  → CLI: agent -p --model composer-2-fast
+```
+
+This enables workflows where different agents use different models — the PM uses fast Sonnet for requirements, the Architect uses Opus for deep design, and the Frontend Dev uses Cursor's specialized UI models.
+
+### Parallel Execution (Beta)
+
+Workflows can declare step dependencies with `depends_on` to enable parallel execution:
+
+```yaml
+steps:
+  - id: design
+    depends_on: [requirements]
+  
+  - id: frontend
+    depends_on: [design]      # Can run parallel with backend
+  
+  - id: backend
+    depends_on: [design]      # Can run parallel with frontend
+  
+  - id: review
+    depends_on: [frontend, backend]  # Waits for both
+```
+
+When running `rick run` from the terminal, the CLI binary executes independent steps concurrently using stdlib threads. When running `/rick run` from Claude Code or Cursor, steps execute sequentially with real-time personality output.
+
+**Backward compatible**: Existing workflows without `depends_on` auto-linearize (sequential execution, same as before).
+
+### Default Model Per Tool
+
+If an agent has no `runtime:` section in `tools.md`:
+- `claude` tool → defaults to `sonnet`
+- `cursor` tool → defaults to `auto`
+
+The agent runs on your current session if the tool matches, otherwise uses the tool's default model.
 
 ## Creating a Universe
 

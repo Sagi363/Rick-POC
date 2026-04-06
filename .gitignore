@@ -7,3 +7,6 @@ CLAUDE.md
 .claude/agents/rick-*
 *.log
 .DS_Store
+universes/
+IMPLEMENTATION_SUMMARY.md
+**/.DS_Store
