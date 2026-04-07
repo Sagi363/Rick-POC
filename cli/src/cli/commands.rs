@@ -892,7 +892,23 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
 }
 
 /// Execute the `pull` / `update` command — pull latest changes from remote and recompile.
+/// Also checks for Rick binary updates and refreshes skill files.
 pub fn pull(universe_name: Option<&str>) -> Result<()> {
+    // Step 0: Self-update + skill refresh (non-blocking — failures don't stop pull)
+    let _ = self_update();
+    if let Ok(home) = env::var("HOME") {
+        match install_skill(&home) {
+            Ok((claude_status, cursor_status)) => {
+                if matches!(claude_status, WriteStatus::Updated) || matches!(cursor_status, WriteStatus::Updated) {
+                    println!("  \x1b[32m✓\x1b[0m Skill files refreshed");
+                }
+            }
+            Err(e) => {
+                println!("  \x1b[33m!\x1b[0m Skill refresh skipped: {}", e);
+            }
+        }
+    }
+
     let cwd = env::current_dir()?;
 
     // If no name given, pull ALL installed universes
@@ -1257,9 +1273,10 @@ pub fn setup(universe_url: Option<&str>, install_deps: bool, non_interactive: bo
     // Step 0: Self-update — check for newer binary
     let _updated = self_update()?;
 
-    // Step 1: Install Skill
-    let skill_status = install_skill(&home)?;
-    println!("  {} Skill        {}", skill_status.icon(), skill_status.message("~/.claude/skills/rick/ + Rick/"));
+    // Step 1: Install Skill (Claude Code + Cursor)
+    let (claude_status, cursor_status) = install_skill(&home)?;
+    println!("  {} Skill (Claude) {}", claude_status.icon(), claude_status.message("~/.claude/skills/rick/ + Rick/"));
+    println!("  {} Skill (Cursor) {}", cursor_status.icon(), cursor_status.message("~/.cursor/skills-cursor/rick/"));
 
     // Step 2: Create Persona (never overwrite — user customizations are sacred)
     let soul_status = write_if_new(
@@ -1431,13 +1448,18 @@ fn write_if_new(path: &str, content: &str) -> Result<WriteStatus> {
     Ok(WriteStatus::Created)
 }
 
-/// Install the Rick skill to ~/.claude/skills/rick/SKILL.md and ~/.claude/skills/Rick/SKILL.md.
-/// Also installs references/ folder for progressive disclosure.
-fn install_skill(home: &str) -> Result<WriteStatus> {
-    let lowercase_path = format!("{}/.claude/skills/rick/SKILL.md", home);
-    let uppercase_path = format!("{}/.claude/skills/Rick/SKILL.md", home);
-    let status = write_if_needed(&lowercase_path, SKILL_CONTENT)?;
-    write_if_needed(&uppercase_path, SKILL_CONTENT)?;
+/// Install the Rick skill to Claude Code and Cursor skill directories.
+/// Returns (claude_status, cursor_status) so callers can report both.
+fn install_skill(home: &str) -> Result<(WriteStatus, WriteStatus)> {
+    // --- Claude Code: ~/.claude/skills/{rick,Rick}/SKILL.md ---
+    let claude_lowercase = format!("{}/.claude/skills/rick/SKILL.md", home);
+    let claude_uppercase = format!("{}/.claude/skills/Rick/SKILL.md", home);
+    let claude_status = write_if_needed(&claude_lowercase, SKILL_CONTENT)?;
+    write_if_needed(&claude_uppercase, SKILL_CONTENT)?;
+
+    // --- Cursor: ~/.cursor/skills-cursor/rick/SKILL.md ---
+    let cursor_path = format!("{}/.cursor/skills-cursor/rick/SKILL.md", home);
+    let cursor_status = write_if_needed(&cursor_path, SKILL_CONTENT)?;
 
     // Install references/ for progressive disclosure
     let refs = [
@@ -1447,6 +1469,8 @@ fn install_skill(home: &str) -> Result<WriteStatus> {
         ("templates-protocol.md", REF_TEMPLATES),
         ("examples.md", REF_EXAMPLES),
     ];
+
+    // Claude Code references (both variants)
     for variant in &["rick", "Rick"] {
         let refs_dir = format!("{}/.claude/skills/{}/references", home, variant);
         std::fs::create_dir_all(&refs_dir)?;
@@ -1455,7 +1479,14 @@ fn install_skill(home: &str) -> Result<WriteStatus> {
         }
     }
 
-    Ok(status)
+    // Cursor references
+    let cursor_refs_dir = format!("{}/.cursor/skills-cursor/rick/references", home);
+    std::fs::create_dir_all(&cursor_refs_dir)?;
+    for (name, content) in &refs {
+        write_if_needed(&format!("{}/{}", cursor_refs_dir, name), content)?;
+    }
+
+    Ok((claude_status, cursor_status))
 }
 
 /// Show permissions guidance — detect missing perms and offer options.
