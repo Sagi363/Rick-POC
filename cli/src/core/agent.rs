@@ -1,10 +1,34 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::a2a::types::AgentPersona;
 use crate::error::{RickError, Result};
 use crate::core::profile::Profile;
 use crate::core::universe::Universe;
 use crate::parsers::yaml;
+
+/// A tool + model pair identifying a runtime target.
+/// tool: "claude" or "cursor" (the CLI binary)
+/// model: any model name passed to --model (user-configurable)
+#[derive(Debug, Clone)]
+pub struct RuntimeSpec {
+    pub tool: String,
+    pub model: String,
+}
+
+impl RuntimeSpec {
+    /// Generate a canonical runtime ID like "claude:sonnet"
+    pub fn id(&self) -> String {
+        format!("{}:{}", self.tool, self.model)
+    }
+}
+
+/// Runtime configuration for an agent (from tools.md).
+#[derive(Debug, Clone)]
+pub struct AgentRuntimeConfig {
+    pub preferred: RuntimeSpec,
+    pub fallback: Vec<RuntimeSpec>,
+}
 
 /// A required MCP server dependency.
 #[derive(Debug, Clone)]
@@ -78,7 +102,7 @@ impl AgentDependencies {
 }
 
 /// Represents an agent within a Universe.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Agent {
     pub name: String,
     pub soul_first_line: String,
@@ -132,6 +156,62 @@ impl Agent {
             memory,
             dependencies,
         })
+    }
+
+    /// Compile agent into a runtime-agnostic persona payload.
+    /// This is what gets sent to RuntimeBackend via A2A TaskRequest.
+    pub fn compile_persona(&self) -> AgentPersona {
+        AgentPersona {
+            name: self.name.clone(),
+            role: self.soul_first_line.clone(),
+            soul: self.soul.clone(),
+            rules: self.rules.clone(),
+        }
+    }
+
+    /// Parse optional runtime config from tools.md frontmatter.
+    /// Returns None if no runtime section found (agent uses global default).
+    /// Parse runtime config from tools.md.
+    /// Expected format (Option B — explicit fields):
+    /// ```yaml
+    /// runtime:
+    ///   preferred:
+    ///     tool: claude
+    ///     model: sonnet
+    ///   fallback:
+    ///     - tool: cursor
+    ///       model: composer-2-fast
+    /// ```
+    pub fn runtime_config(&self) -> Option<AgentRuntimeConfig> {
+        if self.tools.is_empty() {
+            return None;
+        }
+
+        let parsed = yaml::parse_yaml(&self.tools).ok()?;
+        let runtime_section = parsed.get("runtime")?;
+
+        // Parse preferred: {tool, model}
+        let preferred_section = runtime_section.get("preferred")?;
+        let tool = preferred_section.get_str("tool")?.to_string();
+        let model = preferred_section.get_str("model")?.to_string();
+        let preferred = RuntimeSpec { tool, model };
+
+        // Parse fallback: [{tool, model}, ...]
+        let fallback: Vec<RuntimeSpec> = runtime_section
+            .get("fallback")
+            .and_then(|v| v.as_list())
+            .map(|list| {
+                list.iter()
+                    .filter_map(|item| {
+                        let tool = item.get_str("tool")?.to_string();
+                        let model = item.get_str("model")?.to_string();
+                        Some(RuntimeSpec { tool, model })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Some(AgentRuntimeConfig { preferred, fallback })
     }
 
     /// Compile this agent into a Claude Code sub-agent markdown file.

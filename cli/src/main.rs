@@ -1,3 +1,4 @@
+mod a2a;
 mod cli;
 mod core;
 mod error;
@@ -48,6 +49,7 @@ fn run() -> error::Result<()> {
                 }
             }
         }
+        "runtimes" => commands::runtimes()?,
         "compile" => {
             let name = args.get(1).map(|s| s.as_str());
             commands::compile(name)?;

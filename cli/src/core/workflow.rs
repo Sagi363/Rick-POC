@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::{RickError, Result};
+use crate::core::agent::RuntimeSpec;
 use crate::core::universe::Universe;
 use crate::parsers::yaml;
 
@@ -31,6 +32,9 @@ pub struct WorkflowStep {
     pub auto_continue: Option<bool>,
     /// Role required to execute this step (None = everyone can run it).
     pub requires_role: Option<RequiredRole>,
+    // A2A multi-runtime fields (optional)
+    pub depends_on: Vec<String>,       // Step IDs this step depends on
+    pub runtime: Option<RuntimeSpec>,  // Preferred runtime {tool, model}
 }
 
 /// A workflow definition.
@@ -71,8 +75,14 @@ impl Workflow {
         let mut steps = Vec::new();
         if let Some(steps_val) = parsed.get("steps") {
             if let Some(step_list) = steps_val.as_list() {
-                for step_val in step_list {
-                    let id = step_val.get_str("id").unwrap_or("").to_string();
+                for (index, step_val) in step_list.iter().enumerate() {
+                    // Auto-generate ID if missing (for backward compatibility)
+                    let id = step_val
+                        .get_str("id")
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| format!("step{}", index));
+
                     let agent = step_val.get_str("agent").unwrap_or("").to_string();
                     let task = step_val.get_str("task").unwrap_or("").to_string();
                     let checkpoint = step_val
@@ -114,6 +124,25 @@ impl Workflow {
                         None => None,
                     };
 
+                    // A2A multi-runtime fields (optional)
+                    let depends_on = step_val
+                        .get("depends_on")
+                        .and_then(|v| v.as_list())
+                        .map(|list| {
+                            list.iter()
+                                .filter_map(|v| v.as_str())
+                                .map(|s| s.to_string())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    // Parse runtime: {tool: "claude", model: "sonnet"}
+                    let runtime = step_val.get("runtime").and_then(|rt| {
+                        let tool = rt.get_str("tool")?.to_string();
+                        let model = rt.get_str("model")?.to_string();
+                        Some(RuntimeSpec { tool, model })
+                    });
+
                     steps.push(WorkflowStep {
                         id,
                         agent,
@@ -126,6 +155,8 @@ impl Workflow {
                         description,
                         auto_continue,
                         requires_role,
+                        depends_on,
+                        runtime,
                     });
                 }
             }
@@ -150,6 +181,21 @@ impl WorkflowStep {
     /// Returns true if this step is a composition phase (has `uses`).
     pub fn is_phase(&self) -> bool {
         self.uses.is_some()
+    }
+}
+
+/// Convert v2 sequential workflow to dependency chain.
+/// If no steps have depends_on fields, auto-create linear dependencies:
+/// step0 → step1 → step2 → step3
+pub fn linearize_steps(steps: &mut [WorkflowStep]) {
+    let has_any_depends = steps.iter().any(|s| !s.depends_on.is_empty());
+    if has_any_depends {
+        return; // Already has dependencies, don't override
+    }
+
+    // Auto-chain: each step depends on the previous one
+    for i in 1..steps.len() {
+        steps[i].depends_on = vec![steps[i - 1].id.clone()];
     }
 }
 
