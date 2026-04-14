@@ -41,6 +41,7 @@ pub struct AgentPersona {
     pub role: String,             // First line of soul.md (e.g. "Architect")
     pub soul: String,             // Full soul.md content
     pub rules: String,            // Full rules.md content
+    pub extra_files: Vec<(String, String)>, // Additional .md files (filename, content)
 }
 
 /// Summary of a completed prior step, used for context passing.

@@ -7,6 +7,26 @@ use crate::core::profile::Profile;
 use crate::core::universe::Universe;
 use crate::parsers::yaml;
 
+/// Convert a filename like "feature-spec-template.md" to a section title "Feature Spec Template".
+fn md_filename_to_title(filename: &str) -> String {
+    filename
+        .trim_end_matches(".md")
+        .split('-')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => {
+                    let mut s = c.to_uppercase().to_string();
+                    s.extend(chars);
+                    s
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// A tool + model pair identifying a runtime target.
 /// tool: "claude" or "cursor" (the CLI binary)
 /// model: any model name passed to --model (user-configurable)
@@ -112,6 +132,7 @@ pub struct Agent {
     pub tools: String,
     pub memory: String,
     pub dependencies: AgentDependencies,
+    pub extra_files: Vec<(String, String)>, // (filename, content) for non-standard .md files
 }
 
 impl Agent {
@@ -146,6 +167,30 @@ impl Agent {
         let memory = fs::read_to_string(dir.join("Memory.md")).unwrap_or_default();
         let dependencies = AgentDependencies::parse_from_tools(&tools);
 
+        // Scan for extra .md files beyond the 4 standard ones
+        const STANDARD_FILES: &[&str] = &["soul.md", "rules.md", "tools.md", "Memory.md"];
+        let mut extra_files = Vec::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            let mut md_entries: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    let name = e.file_name();
+                    let name_str = name.to_string_lossy();
+                    name_str.ends_with(".md")
+                        && !STANDARD_FILES.contains(&name_str.as_ref())
+                        && e.path().is_file()
+                })
+                .collect();
+            md_entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+            for entry in md_entries {
+                let filename = entry.file_name().to_string_lossy().to_string();
+                if let Ok(file_content) = fs::read_to_string(entry.path()) {
+                    extra_files.push((filename, file_content));
+                }
+            }
+        }
+
         Ok(Agent {
             name,
             soul_first_line,
@@ -155,6 +200,7 @@ impl Agent {
             tools,
             memory,
             dependencies,
+            extra_files,
         })
     }
 
@@ -166,6 +212,7 @@ impl Agent {
             role: self.soul_first_line.clone(),
             soul: self.soul.clone(),
             rules: self.rules.clone(),
+            extra_files: self.extra_files.clone(),
         }
     }
 
@@ -255,6 +302,18 @@ impl Agent {
             }
         }
 
+        // Inline extra .md files as additional sections
+        for (filename, file_content) in &self.extra_files {
+            if !file_content.is_empty() {
+                let title = md_filename_to_title(filename);
+                content.push_str(&format!("\n## {}\n\n", title));
+                content.push_str(file_content);
+                if !file_content.ends_with('\n') {
+                    content.push('\n');
+                }
+            }
+        }
+
         // Memory write-back instructions
         content.push_str("\n## Memory Management\n\n");
         let memory_path = universe_path.join("agents").join(&self.name).join("Memory.md");
@@ -277,6 +336,45 @@ impl Agent {
 
         fs::write(&output_path, &content)?;
         Ok(output_path)
+    }
+
+    /// Check for path-like references to .md files in the agent folder that weren't found.
+    /// Returns a list of warning messages for broken references.
+    pub fn check_references(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+        let agent_folder_pattern = format!("agents/{}/", self.name);
+
+        // Collect all known filenames (standard + extra)
+        let mut known_files: Vec<&str> = vec!["soul.md", "rules.md", "tools.md", "Memory.md"];
+        let extra_names: Vec<&str> = self.extra_files.iter().map(|(name, _)| name.as_str()).collect();
+        known_files.extend(extra_names);
+
+        let contents_to_scan = [
+            ("soul.md", &self.soul),
+            ("rules.md", &self.rules),
+            ("tools.md", &self.tools),
+        ];
+
+        for (source_file, file_content) in &contents_to_scan {
+            for line in file_content.lines() {
+                if let Some(pos) = line.find(&agent_folder_pattern) {
+                    let after = &line[pos + agent_folder_pattern.len()..];
+                    let end = after
+                        .find(|c: char| c.is_whitespace() || c == '`' || c == '\'' || c == '"' || c == ')')
+                        .unwrap_or(after.len());
+                    let referenced_file = &after[..end];
+
+                    if referenced_file.ends_with(".md") && !known_files.contains(&referenced_file) {
+                        warnings.push(format!(
+                            "{} references '{}' but file not found in agent folder",
+                            source_file, referenced_file
+                        ));
+                    }
+                }
+            }
+        }
+
+        warnings
     }
 }
 

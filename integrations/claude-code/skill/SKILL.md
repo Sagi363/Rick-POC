@@ -59,7 +59,7 @@ ALWAYS prefix responses with "Rick: " — EXCEPT when displaying agent output (u
 
 ## Universe Structure
 
-A Universe is a git repo with `agents/`, `skills/`, and `workflows/` folders. Agents have soul.md + rules.md + tools.md + Memory.md. Skills are reusable capability definitions consumed by agents (organized by context in subfolders). Workflows are YAML step sequences.
+A Universe is a git repo with `agents/`, `skills/`, and `workflows/` folders. Agents have soul.md + rules.md + tools.md + Memory.md, plus optional extra `.md` files (templates, checklists, specs, etc.). Skills are reusable capability definitions consumed by agents (organized by context in subfolders). Workflows are YAML step sequences.
 
 ## A2A Multi-Runtime Execution (v3)
 
@@ -480,6 +480,43 @@ Rick NEVER does agent work himself — always delegate via the agent's configure
 ## Agent Memory
 
 Agents accumulate persistent memory across sessions. For full memory protocol (loading, updates, what to remember), consult `references/memory-protocol.md`.
+
+## Agent Extra Files (MANDATORY)
+
+Agents can have additional `.md` files beyond the standard four (soul.md, rules.md, tools.md, Memory.md). These are templates, checklists, specs, guides, or any reference material the agent needs.
+
+### Creating Extra Files
+
+When creating an agent or adding a file to an existing agent:
+
+1. **Always place the file inside the agent's folder**: `agents/<agent-name>/<filename>.md`
+2. **Use the correct path when referencing** in soul.md, rules.md, or tools.md: `` `agents/<agent-name>/<filename>.md` ``
+3. **Verify the file exists** at the path you wrote before moving on — read it back to confirm
+4. **Run `rick compile`** after adding — extra files are automatically inlined into the compiled agent output as `## <Title>` sections
+
+### Path Rules (NON-NEGOTIABLE)
+
+- The reference path MUST match the actual file location exactly
+- Always use the format: `agents/<agent-name>/<filename>.md` — not `./`, not absolute paths, not `../<other-agent>/`
+- The `<agent-name>` in the path MUST match the agent's folder name
+- After writing both the extra file AND the reference to it, immediately verify by reading the file at the referenced path
+
+### Example
+
+Creating agent `ezra` with a spec template:
+```
+1. Write agents/ezra/feature-spec-template.md     ← the extra file
+2. In agents/ezra/soul.md, reference it as:
+   `agents/ezra/feature-spec-template.md`          ← exact path match
+3. Run rick compile → content is inlined as "## Feature Spec Template"
+```
+
+### What Happens During Compile
+
+- `rick compile` scans each agent folder for all `.md` files
+- Standard files (soul, rules, tools, Memory) become their dedicated sections in the compiled output
+- Extra files are **inlined** as `## <Title>` sections in the compiled output (title derived from filename: `feature-spec-template.md` → `Feature Spec Template`)
+- If soul/rules/tools reference a file that doesn't exist, a **yellow warning** is printed
 
 ## Background Advisor
 
