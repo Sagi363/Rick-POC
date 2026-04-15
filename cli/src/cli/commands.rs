@@ -244,6 +244,9 @@ pub fn compile(universe_name: Option<&str>) -> Result<()> {
     for a in &agents {
         let path = a.compile(&universe.name, &output_dir, &universe.path, &profile)?;
         compiled_paths.push(path);
+        for w in a.check_references() {
+            eprintln!("\x1b[33m  Warning [{}]: {}\x1b[0m", a.name, w);
+        }
     }
 
     println!("\x1b[32m  Compiled {} agents:\x1b[0m", compiled_paths.len());
@@ -876,6 +879,9 @@ pub fn add(url: &str, custom_name: Option<&str>) -> Result<()> {
     for a in &agents {
         a.compile(&universe.name, &output_dir, &universe.path, &profile)?;
         compiled_count += 1;
+        for w in a.check_references() {
+            eprintln!("\x1b[33m  Warning [{}]: {}\x1b[0m", a.name, w);
+        }
     }
 
     println!(
@@ -1059,6 +1065,9 @@ pub fn pull(universe_name: Option<&str>) -> Result<()> {
         for a in &agents {
             a.compile(&universe.name, &output_dir, &universe.path, &profile)?;
             compiled_count += 1;
+            for w in a.check_references() {
+                eprintln!("\x1b[33m  Warning [{}]: {}\x1b[0m", a.name, w);
+            }
         }
 
         // Build details string
@@ -1237,6 +1246,9 @@ pub fn profile(args: &[&str]) -> Result<()> {
                     for a in &agents {
                         let _ = a.compile(&universe.name, &output_dir, &universe.path, &prof);
                         total += 1;
+                        for w in a.check_references() {
+                            eprintln!("\x1b[33m  Warning [{}]: {}\x1b[0m", a.name, w);
+                        }
                     }
                 }
                 if total > 0 {
