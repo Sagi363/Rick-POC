@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font-weight: 600;
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+  color: rgb(228 228 231);
+}
+.markdown h1 { font-size: 1.1rem; }
+.markdown h2 { font-size: 1rem; }
+.markdown h3 { font-size: 0.9rem; }
+.markdown p { margin: 0.4em 0; color: rgb(212 212 216); }
+.markdown ul, .markdown ol { margin: 0.4em 0 0.4em 1.2em; }
+.markdown li { margin: 0.15em 0; }
+.markdown code {
+  background: rgb(39 39 42);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.markdown pre {
+  background: rgb(24 24 27);
+  border: 1px solid rgb(39 39 42);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.markdown pre code { background: transparent; padding: 0; }
+.markdown a { color: rgb(96 165 250); text-decoration: underline; }
+.markdown hr { border-color: rgb(39 39 42); margin: 1em 0; }
+.markdown table { border-collapse: collapse; margin: 0.6em 0; }
+.markdown th, .markdown td {
+  border: 1px solid rgb(39 39 42);
+  padding: 4px 8px;
+  font-size: 0.85em;
+}
+.markdown blockquote {
+  border-left: 3px solid rgb(63 63 70);
+  padding-left: 0.6rem;
+  color: rgb(161 161 170);
+  margin: 0.6em 0;
+}

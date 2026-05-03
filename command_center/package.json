@@ -1,0 +1,63 @@
+{
+  "name": "rick-command-center",
+  "version": "0.1.0",
+  "description": "Desktop command center for Claude Code sessions and Rick workflows",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "predev": "pkill -f 'node_modules/.bin/electron-vite' >/dev/null 2>&1; pkill -f 'SDDeditor/node_modules/electron/dist/Electron.app' >/dev/null 2>&1; sleep 0.3 || true",
+    "dev": "electron-vite dev",
+    "kill": "pkill -f 'node_modules/.bin/electron-vite' >/dev/null 2>&1; pkill -f 'SDDeditor/node_modules/electron/dist/Electron.app' >/dev/null 2>&1; true",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "package": "electron-vite build && electron-builder --mac --dir",
+    "package:dmg": "npm run kill && CSC_IDENTITY_AUTO_DISCOVERY=false electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
+    "rebuild-native": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty || true"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "chokidar": "^4.0.3",
+    "clsx": "^2.1.1",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.0",
+    "node-pty": "^1.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.dekel.rickcommand",
+    "productName": "Rick Command Center",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "gatekeeperAssess": false
+    }
+  }
+}
